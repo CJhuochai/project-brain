@@ -1,6 +1,9 @@
 package extract
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestFileExtractsSpringRouteAndMapperEvidence(t *testing.T) {
 	content := []byte(`package com.example.entry;
@@ -134,6 +137,42 @@ func TestFileReportsUnresolvedMapperWithoutNamespace(t *testing.T) {
 	}
 }
 
+func TestFileExtractsMicroserviceRelationships(t *testing.T) {
+	result := File("EntryService.java", []byte(`class EntryService {
+  @DubboReference private EntryApi entryApi;
+  @KafkaListener(topics = "entry.created") void consume() {}
+  void send() { kafkaTemplate.send("entry.created", "x"); }
+  @Scheduled(cron = "0 * * * * *") void sync() {}
+}`))
+	for _, want := range []struct{ kind, target string }{{"dubbo_reference", "dubbo:EntryApi"}, {"consumes_topic", "mq:entry.created"}, {"publishes_topic", "mq:entry.created"}, {"scheduled_job", "schedule:EntryService#sync"}} {
+		if !hasEdge(result.Edges, want.kind, want.target, Certain) {
+			t.Fatalf("missing=%#v edges=%#v", want, result.Edges)
+		}
+	}
+}
+
+func TestFileMarksDynamicBehaviorUnresolved(t *testing.T) {
+	result := File("Mapper.xml", []byte(`<mapper namespace="X"><select id="x">select * from ${table}<if test="x"> where id=1</if></select></mapper>`))
+	if !hasDiagnostic(result.Diagnostics, "动态 SQL") {
+		t.Fatalf("diagnostics=%#v", result.Diagnostics)
+	}
+}
+
+func TestFileExtractsConfigMigrationAndHTTPContracts(t *testing.T) {
+	for _, sample := range []struct {
+		path, content, kind, target string
+	}{
+		{"application.yml", "entry.enabled: true", "defines_config", "config:entry.enabled"},
+		{"V1__entry.sql", "create table student_entry(id bigint)", "migration_table", "table:student_entry"},
+		{"openapi.yaml", "/api/entry:\n  post: {}", "api_contract", "http:ANY:/api/entry"},
+		{"entry.ts", `axios.post("/api/entry", body)`, "calls_http", "http:POST:/api/entry"},
+	} {
+		if !hasEdge(File(sample.path, []byte(sample.content)).Edges, sample.kind, sample.target, Certain) {
+			t.Fatalf("missing %s from %s", sample.kind, sample.path)
+		}
+	}
+}
+
 func hasSymbol(symbols []Symbol, name, kind string) bool {
 	for _, symbol := range symbols {
 		if symbol.Name == name && symbol.Kind == kind {
@@ -155,6 +194,15 @@ func hasEdge(edges []Edge, kind, target string, confidence Confidence) bool {
 func hasEdgeFrom(edges []Edge, kind, source, target string, confidence Confidence) bool {
 	for _, edge := range edges {
 		if edge.Kind == kind && edge.Source == source && edge.Target == target && edge.Confidence == confidence {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDiagnostic(diagnostics []Diagnostic, text string) bool {
+	for _, diagnostic := range diagnostics {
+		if strings.Contains(diagnostic.Message, text) {
 			return true
 		}
 	}

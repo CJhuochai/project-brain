@@ -189,7 +189,7 @@ func isSupported(path string) bool {
 	if name == "pom.xml" {
 		return true
 	}
-	for _, extension := range []string{".java", ".xml", ".yml", ".yaml", ".properties", ".sql", ".md", ".json"} {
+	for _, extension := range []string{".java", ".xml", ".yml", ".yaml", ".properties", ".sql", ".md", ".json", ".ts", ".tsx", ".js", ".vue", ".html"} {
 		if strings.HasSuffix(name, extension) {
 			return true
 		}
