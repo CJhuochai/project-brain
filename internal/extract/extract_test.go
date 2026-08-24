@@ -57,6 +57,23 @@ func TestFileExtractsMavenModuleDependency(t *testing.T) {
 	}
 }
 
+func TestFileExtractsImportInheritanceAndFeignEvidence(t *testing.T) {
+	result := File("Client.java", []byte(`package com.example;
+import com.example.BaseClient;
+@FeignClient(name = "student")
+class Client extends BaseClient {}`))
+	if !hasEdge(result.Edges, "imports", "com.example.BaseClient", Certain) || !hasEdge(result.Edges, "implements", "BaseClient", Probable) || !hasEdge(result.Edges, "feign_client", "feign:student", Certain) {
+		t.Fatalf("edges=%#v", result.Edges)
+	}
+}
+
+func TestFileReportsUnresolvedMapperWithoutNamespace(t *testing.T) {
+	result := File("Mapper.xml", []byte(`<mapper><select id="find">select 1</select></mapper>`))
+	if len(result.Diagnostics) != 1 || result.Diagnostics[0].Confidence != Unresolved {
+		t.Fatalf("diagnostics=%#v", result.Diagnostics)
+	}
+}
+
 func hasSymbol(symbols []Symbol, name, kind string) bool {
 	for _, symbol := range symbols {
 		if symbol.Name == name && symbol.Kind == kind {

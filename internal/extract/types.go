@@ -23,6 +23,13 @@ type Edge struct {
 }
 
 type Result struct {
-	Symbols []Symbol `json:"symbols"`
-	Edges   []Edge   `json:"edges"`
+	Symbols     []Symbol     `json:"symbols"`
+	Edges       []Edge       `json:"edges"`
+	Diagnostics []Diagnostic `json:"diagnostics"`
+}
+
+type Diagnostic struct {
+	Message    string     `json:"message"`
+	Line       int        `json:"line"`
+	Confidence Confidence `json:"confidence"`
 }
