@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/CJhuochai/project-brain/internal/change"
 	"github.com/CJhuochai/project-brain/internal/indexer"
 	"github.com/CJhuochai/project-brain/internal/query"
 	"github.com/CJhuochai/project-brain/internal/requirement"
@@ -70,12 +71,14 @@ func handle(root string, request request) (any, error) {
 func tools() []map[string]any {
 	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	text := map[string]any{"type": "object", "properties": map[string]any{"text": map[string]string{"type": "string", "description": "需求、业务词、路由或符号"}}, "required": []string{"text"}, "additionalProperties": false}
+	changeRange := map[string]any{"type": "object", "properties": map[string]any{"range": map[string]string{"type": "string", "description": "本地 Git commit 或 base..target"}}, "required": []string{"range"}, "additionalProperties": false}
 	readOnly := map[string]bool{"readOnlyHint": true}
 	return []map[string]any{
 		{"name": "workspace_status", "description": "读取本地工作区索引状态", "inputSchema": empty, "annotations": readOnly},
 		{"name": "find_business_context", "description": "按关键词查找源码证据", "inputSchema": text, "annotations": readOnly},
 		{"name": "trace_code_path", "description": "追踪下游代码关系", "inputSchema": text, "annotations": readOnly},
 		{"name": "analyze_change_impact", "description": "分析上游影响", "inputSchema": text, "annotations": readOnly},
+		{"name": "analyze_change", "description": "根据本地 Git 提交或范围定位变更文件及索引证据", "inputSchema": changeRange, "annotations": readOnly},
 		{"name": "analyze_requirement", "description": "收到需求文档、原型或二次开发需求时，先用此工具定位候选项目和业务上下文", "inputSchema": text, "annotations": readOnly},
 		{"name": "get_evidence", "description": "读取指定关键词的来源证据", "inputSchema": text, "annotations": readOnly},
 	}
@@ -106,6 +109,9 @@ func call(root, name string, arguments map[string]any) (any, error) {
 		return query.Trace(db, text, 6)
 	case "analyze_change_impact":
 		return query.Impact(db, text, 6)
+	case "analyze_change":
+		revision, _ := arguments["range"].(string)
+		return change.Analyze(root, db, revision)
 	case "analyze_requirement":
 		return requirement.Analyze(db, text)
 	default:

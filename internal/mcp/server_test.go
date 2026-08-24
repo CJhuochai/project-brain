@@ -121,7 +121,7 @@ func TestServeIgnoresInitializedNotificationAndPublishesInputSchemas(t *testing.
 	if err := Serve(input, &output, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
-	lines := strings.Fields(strings.TrimSpace(output.String()))
+	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
 	if len(lines) != 2 {
 		t.Fatalf("notification must not receive a response: %s", output.String())
 	}
