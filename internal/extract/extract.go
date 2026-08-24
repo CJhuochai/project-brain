@@ -1,0 +1,82 @@
+package extract
+
+import (
+	"path/filepath"
+	"regexp"
+	"strings"
+)
+
+var (
+	packagePattern   = regexp.MustCompile(`^\s*package\s+([\w.]+)\s*;`)
+	typePattern      = regexp.MustCompile(`\b(class|interface|enum)\s+(\w+)`)
+	routePattern     = regexp.MustCompile(`@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*"([^"]+)"`)
+	namespacePattern = regexp.MustCompile(`(?i)<mapper\s+[^>]*namespace\s*=\s*"([^"]+)"`)
+	statementPattern = regexp.MustCompile(`(?i)<(select|insert|update|delete)\s+[^>]*id\s*=\s*"([^"]+)"`)
+	tablePattern     = regexp.MustCompile(`(?i)\b(from|join|update|into)\s+[` + "`" + `"]?([a-zA-Z0-9_]+)`)
+)
+
+func File(path string, content []byte) Result {
+	if strings.EqualFold(filepath.Ext(path), ".xml") {
+		return extractMapper(content)
+	}
+	if strings.EqualFold(filepath.Ext(path), ".java") {
+		return extractJava(content)
+	}
+	return Result{}
+}
+
+func extractJava(content []byte) Result {
+	lines := strings.Split(string(content), "\n")
+	packageName, currentType, currentKind := "", "", "class"
+	controller := false
+	for index, line := range lines {
+		if match := packagePattern.FindStringSubmatch(line); match != nil {
+			packageName = match[1]
+		}
+		if strings.Contains(line, "@RestController") || strings.Contains(line, "@Controller") {
+			controller = true
+		}
+		if match := typePattern.FindStringSubmatch(line); match != nil {
+			currentType, currentKind = match[2], match[1]
+			name := currentType
+			if packageName != "" {
+				name = packageName + "." + currentType
+			}
+			if controller {
+				currentKind = "controller"
+			}
+			result := Result{Symbols: []Symbol{{Name: name, Kind: currentKind, Line: index + 1}}}
+			for routeIndex, routeLine := range lines {
+				if route := routePattern.FindStringSubmatch(routeLine); route != nil && controller {
+					result.Edges = append(result.Edges, Edge{Source: name, Target: route[2], Kind: "route", Line: routeIndex + 1, Confidence: Certain})
+				}
+			}
+			return result
+		}
+	}
+	return Result{}
+}
+
+func extractMapper(content []byte) Result {
+	text := string(content)
+	namespace := ""
+	if match := namespacePattern.FindStringSubmatch(text); match != nil {
+		namespace = match[1]
+	}
+	if namespace == "" {
+		return Result{}
+	}
+	result := Result{Symbols: []Symbol{{Name: namespace, Kind: "mapper", Line: 1}}}
+	for _, statement := range statementPattern.FindAllStringSubmatchIndex(text, -1) {
+		id := text[statement[4]:statement[5]]
+		line := strings.Count(text[:statement[0]], "\n") + 1
+		name := namespace + "." + id
+		result.Symbols = append(result.Symbols, Symbol{Name: name, Kind: "mapper_statement", Line: line})
+		result.Edges = append(result.Edges, Edge{Source: namespace, Target: name, Kind: "maps_statement", Line: line, Confidence: Certain})
+	}
+	for _, table := range tablePattern.FindAllStringSubmatchIndex(text, -1) {
+		line := strings.Count(text[:table[0]], "\n") + 1
+		result.Edges = append(result.Edges, Edge{Source: namespace, Target: text[table[4]:table[5]], Kind: "queries_table", Line: line, Confidence: Certain})
+	}
+	return result
+}

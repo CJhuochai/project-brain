@@ -33,8 +33,8 @@ func (db *DB) initialize() error {
 	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		return err
 	}
-	if version < 2 {
-		if _, err := db.Exec(`DROP TABLE IF EXISTS file_fts; DROP TABLE IF EXISTS files;`); err != nil {
+	if version < 3 {
+		if _, err := db.Exec(`DROP TABLE IF EXISTS edges; DROP TABLE IF EXISTS symbols; DROP TABLE IF EXISTS file_fts; DROP TABLE IF EXISTS files;`); err != nil {
 			return err
 		}
 	}
@@ -48,7 +48,28 @@ CREATE TABLE IF NOT EXISTS files (
   UNIQUE (repository_id, path)
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS file_fts USING fts5(repository_id, path, content);
-PRAGMA user_version = 2;
+CREATE TABLE IF NOT EXISTS symbols (
+  id INTEGER PRIMARY KEY,
+  repository_id TEXT NOT NULL,
+  path TEXT NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  line INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS symbols_name ON symbols(name);
+CREATE TABLE IF NOT EXISTS edges (
+  id INTEGER PRIMARY KEY,
+  repository_id TEXT NOT NULL,
+  path TEXT NOT NULL,
+  source TEXT NOT NULL,
+  target TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  line INTEGER NOT NULL,
+  confidence TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS edges_target ON edges(target);
+CREATE INDEX IF NOT EXISTS edges_source ON edges(source);
+PRAGMA user_version = 3;
 `)
 	return err
 }

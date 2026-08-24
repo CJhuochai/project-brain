@@ -1,6 +1,10 @@
 package storage
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/CJhuochai/project-brain/internal/extract"
+)
 
 func TestUpsertFileSkipsUnchangedContentAndIndexesSearchText(t *testing.T) {
 	db, err := Open(t.TempDir())
@@ -32,6 +36,29 @@ func TestUpsertFileSkipsUnchangedContentAndIndexesSearchText(t *testing.T) {
 	paths, err = db.SearchFiles("StudentEntryApplication")
 	if err != nil || len(paths) != 2 {
 		t.Fatalf("same path from two repositories must remain searchable: paths=%#v err=%v", paths, err)
+	}
+}
+
+func TestReplaceEvidenceTxStoresSourceLine(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := extract.Result{Symbols: []extract.Symbol{{Name: "com.example.EntryController", Kind: "controller", Line: 8}}, Edges: []extract.Edge{{Source: "com.example.EntryController", Target: "/entry", Kind: "route", Line: 9, Confidence: extract.Certain}}}
+	if err := db.ReplaceEvidenceTx(tx, "repo", "EntryController.java", result); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	var line int
+	if err := db.QueryRow(`SELECT line FROM edges WHERE target = '/entry'`).Scan(&line); err != nil || line != 9 {
+		t.Fatalf("line=%d err=%v", line, err)
 	}
 }
 

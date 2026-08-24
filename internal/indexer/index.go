@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/CJhuochai/project-brain/internal/extract"
 	"github.com/CJhuochai/project-brain/internal/storage"
 	"github.com/CJhuochai/project-brain/internal/workspace"
 )
@@ -80,6 +81,10 @@ func indexRepository(repository workspace.Repository, db *storage.DB) (int, int,
 		}
 		indexed++
 		if fileChanged {
+			if err := db.ReplaceEvidenceTx(transaction, repository.Path, header.Name, extract.File(header.Name, content)); err != nil {
+				_ = command.Wait()
+				return 0, 0, err
+			}
 			changed++
 		}
 	}
