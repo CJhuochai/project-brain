@@ -5,3 +5,4 @@
 *.sqlite-shm
 *.sqlite-wal
 /tmp/
+.worktrees/
