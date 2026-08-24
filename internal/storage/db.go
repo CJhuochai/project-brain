@@ -77,7 +77,42 @@ CREATE TABLE IF NOT EXISTS edges (
 CREATE INDEX IF NOT EXISTS edges_target ON edges(target);
 CREATE INDEX IF NOT EXISTS edges_source ON edges(source);
 CREATE TABLE IF NOT EXISTS diagnostics (id INTEGER PRIMARY KEY, repository_id TEXT NOT NULL, path TEXT NOT NULL, message TEXT NOT NULL, line INTEGER NOT NULL, confidence TEXT NOT NULL);
-PRAGMA user_version = 7;
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	if version < 8 {
+		if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS reports (
+  id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  baseline_snapshot TEXT NOT NULL,
+  input_digest TEXT NOT NULL,
+  report_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS feedback (
+  id TEXT PRIMARY KEY,
+  report_id TEXT NOT NULL,
+  subject_kind TEXT NOT NULL,
+  subject_key TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  note TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rules (
+  id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL,
+  pattern TEXT NOT NULL,
+  target TEXT NOT NULL,
+  confidence TEXT NOT NULL,
+  note TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(kind, pattern, target)
+);
+PRAGMA user_version = 8;
+`); err != nil {
+			return err
+		}
+	}
+	return nil
 }

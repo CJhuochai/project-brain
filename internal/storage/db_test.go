@@ -23,7 +23,7 @@ func TestOpenRebuildsPreviousExtractorSchema(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	var version int
-	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != 7 {
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != 8 {
 		t.Fatalf("version=%d err=%v", version, err)
 	}
 	var files int
