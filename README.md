@@ -25,6 +25,8 @@ bin\project-brain.exe impact E:\ExampleWorkspace com.example.EntryService
 
 所有命令默认输出 JSON。`trace` 只在目标符号唯一时向下遍历；同名符号会返回候选，不会猜测。`impact` 将 `certain` 与 `probable` 置信度原样带回。
 
+MCP 工具调用前会比较本机 `origin/HEAD` 与已索引 commit：基线变化时自动增量刷新，未变化时复用现有索引。它不会 fetch、checkout 或修改业务仓库。
+
 ## MCP
 
 标准输入输出模式：
