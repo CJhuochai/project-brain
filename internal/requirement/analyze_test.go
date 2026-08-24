@@ -172,3 +172,20 @@ class EntryApplication { public void groupSubmit() {} }`)
 		}
 	}
 }
+
+func TestAnalyzeLimitsEvidencePayload(t *testing.T) {
+	db, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	for index := 0; index < maxEvidence+1; index++ {
+		if _, err := db.UpsertFile("entry-service", fmt.Sprintf("Entry%d.java", index), []byte("class Entry {}")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report, err := Analyze(db, "Entry")
+	if err != nil || len(report.Evidence) != maxEvidence {
+		t.Fatalf("evidence=%d err=%v", len(report.Evidence), err)
+	}
+}
