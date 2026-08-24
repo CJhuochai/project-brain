@@ -32,11 +32,11 @@ func TestServeIgnoresInitializedNotificationAndPublishesInputSchemas(t *testing.
 	var response struct {
 		Result struct {
 			Tools []struct {
-				Name        string         `json:\"name\"`
-				InputSchema map[string]any `json:\"inputSchema\"`
-				Annotations map[string]any `json:\"annotations\"`
-			} `json:\"tools\"`
-		} `json:\"result\"`
+				Name        string         `json:"name"`
+				InputSchema map[string]any `json:"inputSchema"`
+				Annotations map[string]any `json:"annotations"`
+			} `json:"tools"`
+		} `json:"result"`
 	}
 	if err := json.Unmarshal([]byte(lines[1]), &response); err != nil {
 		t.Fatal(err)
