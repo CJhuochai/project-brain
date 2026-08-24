@@ -3,6 +3,7 @@ package requirement
 import (
 	"regexp"
 	"sort"
+	"unicode"
 
 	"github.com/CJhuochai/project-brain/internal/query"
 	"github.com/CJhuochai/project-brain/internal/storage"
@@ -25,8 +26,8 @@ func Analyze(db *storage.DB, text string) (Report, error) {
 	report := Report{}
 	counts := map[string]int{}
 	seen := map[string]bool{}
-	for _, token := range tokenPattern.FindAllString(text, -1) {
-		if seen[token] || len(token) < 3 {
+	for _, token := range keywords(text) {
+		if seen[token] {
 			continue
 		}
 		seen[token] = true
@@ -45,4 +46,29 @@ func Analyze(db *storage.DB, text string) (Report, error) {
 	}
 	sort.Slice(report.Repositories, func(i, j int) bool { return report.Repositories[i].Evidence > report.Repositories[j].Evidence })
 	return report, nil
+}
+
+func keywords(text string) []string {
+	var result []string
+	for _, token := range tokenPattern.FindAllString(text, -1) {
+		if len(token) >= 3 {
+			result = append(result, token)
+		}
+	}
+	var han []rune
+	flush := func() {
+		for index := 0; index+1 < len(han); index++ {
+			result = append(result, string(han[index:index+2]))
+		}
+		han = nil
+	}
+	for _, character := range text {
+		if unicode.Is(unicode.Han, character) {
+			han = append(han, character)
+			continue
+		}
+		flush()
+	}
+	flush()
+	return result
 }
