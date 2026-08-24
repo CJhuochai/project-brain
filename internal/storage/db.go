@@ -29,15 +29,26 @@ func Open(workspaceDir string) (*DB, error) {
 }
 
 func (db *DB) initialize() error {
+	var version int
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		return err
+	}
+	if version < 2 {
+		if _, err := db.Exec(`DROP TABLE IF EXISTS file_fts; DROP TABLE IF EXISTS files;`); err != nil {
+			return err
+		}
+	}
 	_, err := db.Exec(`
 CREATE TABLE IF NOT EXISTS files (
+	  id INTEGER PRIMARY KEY,
   repository_id TEXT NOT NULL,
   path TEXT NOT NULL,
   content_hash TEXT NOT NULL,
   content TEXT NOT NULL,
-  PRIMARY KEY (repository_id, path)
+  UNIQUE (repository_id, path)
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS file_fts USING fts5(repository_id, path, content);
+PRAGMA user_version = 2;
 `)
 	return err
 }

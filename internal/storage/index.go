@@ -7,32 +7,51 @@ import (
 )
 
 func (db *DB) UpsertFile(repositoryID, path string, content []byte) (bool, error) {
+	transaction, err := db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = transaction.Rollback() }()
+	changed, err := db.UpsertFileTx(transaction, repositoryID, path, content)
+	if err != nil {
+		return false, err
+	}
+	if err := transaction.Commit(); err != nil {
+		return false, err
+	}
+	return changed, nil
+}
+
+func (db *DB) UpsertFileTx(transaction *sql.Tx, repositoryID, path string, content []byte) (bool, error) {
 	hash := sha256.Sum256(content)
 	contentHash := hex.EncodeToString(hash[:])
 	var currentHash string
-	err := db.QueryRow(`SELECT content_hash FROM files WHERE repository_id = ? AND path = ?`, repositoryID, path).Scan(&currentHash)
+	var fileID int64
+	err := transaction.QueryRow(`SELECT id, content_hash FROM files WHERE repository_id = ? AND path = ?`, repositoryID, path).Scan(&fileID, &currentHash)
 	if err == nil && currentHash == contentHash {
 		return false, nil
 	}
 	if err != nil && err != sql.ErrNoRows {
 		return false, err
 	}
-	transaction, err := db.Begin()
-	if err != nil {
+	if err == sql.ErrNoRows {
+		result, insertErr := transaction.Exec(`INSERT INTO files(repository_id, path, content_hash, content) VALUES(?, ?, ?, ?)`, repositoryID, path, contentHash, string(content))
+		if insertErr != nil {
+			return false, insertErr
+		}
+		fileID, err = result.LastInsertId()
+		if err != nil {
+			return false, err
+		}
+	} else {
+		if _, err := transaction.Exec(`UPDATE files SET content_hash = ?, content = ? WHERE id = ?`, contentHash, string(content), fileID); err != nil {
+			return false, err
+		}
+	}
+	if _, err := transaction.Exec(`DELETE FROM file_fts WHERE rowid = ?`, fileID); err != nil {
 		return false, err
 	}
-	defer func() { _ = transaction.Rollback() }()
-	if _, err := transaction.Exec(`INSERT INTO files(repository_id, path, content_hash, content) VALUES(?, ?, ?, ?)
-ON CONFLICT(repository_id, path) DO UPDATE SET content_hash=excluded.content_hash, content=excluded.content`, repositoryID, path, contentHash, string(content)); err != nil {
-		return false, err
-	}
-	if _, err := transaction.Exec(`DELETE FROM file_fts WHERE repository_id = ? AND path = ?`, repositoryID, path); err != nil {
-		return false, err
-	}
-	if _, err := transaction.Exec(`INSERT INTO file_fts(repository_id, path, content) VALUES(?, ?, ?)`, repositoryID, path, string(content)); err != nil {
-		return false, err
-	}
-	if err := transaction.Commit(); err != nil {
+	if _, err := transaction.Exec(`INSERT INTO file_fts(rowid, repository_id, path, content) VALUES(?, ?, ?, ?)`, fileID, repositoryID, path, string(content)); err != nil {
 		return false, err
 	}
 	return true, nil

@@ -41,6 +41,11 @@ func Index(root string, db *storage.DB) (Result, error) {
 }
 
 func indexRepository(repository workspace.Repository, db *storage.DB) (int, int, error) {
+	transaction, err := db.Begin()
+	if err != nil {
+		return 0, 0, err
+	}
+	defer func() { _ = transaction.Rollback() }()
 	command := exec.Command("git", "-C", repository.Path, "archive", "--format=tar", repository.BaselineCommit)
 	stdout, err := command.StdoutPipe()
 	if err != nil {
@@ -68,7 +73,7 @@ func indexRepository(repository workspace.Repository, db *storage.DB) (int, int,
 			_ = command.Wait()
 			return 0, 0, readErr
 		}
-		fileChanged, upsertErr := db.UpsertFile(repository.Path, header.Name, content)
+		fileChanged, upsertErr := db.UpsertFileTx(transaction, repository.Path, header.Name, content)
 		if upsertErr != nil {
 			_ = command.Wait()
 			return 0, 0, upsertErr
@@ -83,6 +88,9 @@ func indexRepository(repository workspace.Repository, db *storage.DB) (int, int,
 		return 0, 0, err
 	}
 	if err := command.Wait(); err != nil {
+		return 0, 0, err
+	}
+	if err := transaction.Commit(); err != nil {
 		return 0, 0, err
 	}
 	return indexed, changed, nil

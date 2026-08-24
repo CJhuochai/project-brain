@@ -34,3 +34,27 @@ func TestUpsertFileSkipsUnchangedContentAndIndexesSearchText(t *testing.T) {
 		t.Fatalf("same path from two repositories must remain searchable: paths=%#v err=%v", paths, err)
 	}
 }
+
+func TestUpsertFileTxKeepsMultipleFilesSearchableAfterCommit(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.UpsertFileTx(tx, "repo", "A.java", []byte("class Alpha {}")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.UpsertFileTx(tx, "repo", "B.java", []byte("class Beta {}")); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if paths, err := db.SearchFiles("Alpha OR Beta"); err != nil || len(paths) != 2 {
+		t.Fatalf("paths=%#v err=%v", paths, err)
+	}
+}
