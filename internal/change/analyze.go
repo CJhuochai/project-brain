@@ -17,9 +17,11 @@ type File struct {
 }
 
 type Report struct {
-	Range    string           `json:"range"`
-	Files    []File           `json:"files"`
-	Evidence []query.Evidence `json:"evidence"`
+	Range     string           `json:"range"`
+	Files     []File           `json:"files"`
+	Evidence  []query.Evidence `json:"evidence"`
+	Risks     []string         `json:"risks,omitempty"`
+	Questions []string         `json:"questions,omitempty"`
 }
 
 func Files(root, revision string) ([]File, error) {
@@ -80,6 +82,22 @@ ORDER BY path, line`, file.RepositoryID, file.Path, file.RepositoryID, file.Path
 		}
 		if err := rows.Close(); err != nil {
 			return Report{}, err
+		}
+	}
+	if len(report.Evidence) == 0 {
+		report.Questions = append(report.Questions, "变更文件尚无索引证据，请先刷新对应仓库基线索引")
+	}
+	repositories := map[string]bool{}
+	for _, file := range files {
+		repositories[file.Repository] = true
+	}
+	if len(repositories) > 1 {
+		report.Risks = append(report.Risks, "变更跨多个仓库，需要确认版本发布顺序与接口兼容性")
+	}
+	for _, evidence := range report.Evidence {
+		if evidence.Kind == "queries_table" {
+			report.Risks = append(report.Risks, "变更涉及数据表，请确认迁移、回滚与历史数据兼容性")
+			break
 		}
 	}
 	return report, nil
