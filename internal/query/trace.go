@@ -24,6 +24,12 @@ func Trace(db *storage.DB, target string, maxDepth int) (TraceResult, error) {
 	if err != nil {
 		return result, err
 	}
+	if len(starts) == 0 && strings.HasPrefix(target, "/") {
+		starts, err = sourcesForTarget(db, target)
+		if err != nil {
+			return result, err
+		}
+	}
 	if len(starts) != 1 {
 		result.Candidates = starts
 		return result, nil
@@ -31,6 +37,26 @@ func Trace(db *storage.DB, target string, maxDepth int) (TraceResult, error) {
 	paths, err := walk(db, starts[0].Name, maxDepth, false)
 	result.Paths = paths
 	return result, err
+}
+
+func sourcesForTarget(db *storage.DB, target string) ([]Evidence, error) {
+	rows, err := db.Query(`SELECT repository_id, path, line, source, kind, confidence FROM edges WHERE target = ? ORDER BY source`, target)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var results []Evidence
+	seen := map[string]bool{}
+	for rows.Next() {
+		var item Evidence
+		if err := rows.Scan(&item.Repository, &item.File, &item.Line, &item.Name, &item.Kind, &item.Confidence); err != nil {
+			return nil, err
+		}
+		if !seen[item.Name] {
+			results, seen[item.Name] = append(results, item), true
+		}
+	}
+	return results, rows.Err()
 }
 
 func Impact(db *storage.DB, target string, maxDepth int) (ImpactResult, error) {

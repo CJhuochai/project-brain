@@ -45,7 +45,7 @@ func TestTraceAndImpactFollowStoredEvidence(t *testing.T) {
 	}
 	result := extract.Result{
 		Symbols: []extract.Symbol{{Name: "com.example.EntryController", Kind: "controller", Line: 1}, {Name: "com.example.EntryService", Kind: "service", Line: 1}, {Name: "com.example.EntryMapper", Kind: "mapper", Line: 1}},
-		Edges:   []extract.Edge{{Source: "com.example.EntryController", Target: "EntryService", Kind: "uses", Line: 2, Confidence: extract.Probable}, {Source: "com.example.EntryService", Target: "EntryMapper", Kind: "uses", Line: 2, Confidence: extract.Probable}},
+		Edges:   []extract.Edge{{Source: "com.example.EntryController", Target: "/entry", Kind: "route", Line: 2, Confidence: extract.Certain}, {Source: "com.example.EntryController", Target: "EntryService", Kind: "uses", Line: 3, Confidence: extract.Probable}, {Source: "com.example.EntryService", Target: "EntryMapper", Kind: "uses", Line: 2, Confidence: extract.Probable}},
 	}
 	if err := db.ReplaceEvidenceTx(tx, "repo", "Entry.java", result); err != nil {
 		t.Fatal(err)
@@ -54,11 +54,25 @@ func TestTraceAndImpactFollowStoredEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	trace, err := Trace(db, "EntryController", 3)
-	if err != nil || len(trace.Paths) != 1 || len(trace.Paths[0]) != 2 {
+	if err != nil || longest(trace.Paths) != 2 {
 		t.Fatalf("trace=%#v err=%v", trace, err)
 	}
 	impact, err := Impact(db, "com.example.EntryMapper", 3)
 	if err != nil || len(impact.Relations) != 2 {
 		t.Fatalf("impact=%#v err=%v", impact, err)
 	}
+	routeTrace, err := Trace(db, "/entry", 3)
+	if err != nil || longest(routeTrace.Paths) != 2 {
+		t.Fatalf("route trace=%#v err=%v", routeTrace, err)
+	}
+}
+
+func longest(paths [][]Evidence) int {
+	result := 0
+	for _, path := range paths {
+		if len(path) > result {
+			result = len(path)
+		}
+	}
+	return result
 }
