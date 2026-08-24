@@ -20,6 +20,9 @@ type Report struct {
 	Repositories []RepositoryCandidate `json:"repositories"`
 	EntryPoints  []query.Evidence      `json:"entry_points"`
 	ChangePoints []query.Evidence      `json:"change_points"`
+	Impacts      []query.TraceResult   `json:"impacts,omitempty"`
+	Risks        []string              `json:"risks,omitempty"`
+	Questions    []string              `json:"questions,omitempty"`
 }
 
 var tokenPattern = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_/-]*`)
@@ -51,6 +54,30 @@ func Analyze(db *storage.DB, text string) (Report, error) {
 	}
 	for repository, count := range counts {
 		report.Repositories = append(report.Repositories, RepositoryCandidate{Repository: repository, Evidence: count})
+	}
+	for _, entry := range report.EntryPoints {
+		if entry.Name == "" {
+			continue
+		}
+		trace, err := query.Trace(db, entry.Name, 6)
+		if err != nil {
+			return report, err
+		}
+		if len(trace.Paths) > 0 {
+			report.Impacts = append(report.Impacts, trace)
+		}
+	}
+	if len(report.Evidence) == 0 {
+		report.Questions = append(report.Questions, "没有找到可验证的代码证据，请确认业务词、路由或目标模块")
+	}
+	for _, item := range report.Evidence {
+		if item.Kind == "queries_table" {
+			report.Risks = append(report.Risks, "需求可能影响数据表，请确认迁移、回滚与历史数据兼容性")
+			break
+		}
+	}
+	if len(report.Repositories) > 1 {
+		report.Risks = append(report.Risks, "需求涉及多个仓库，请确认接口契约和发布顺序")
 	}
 	sort.Slice(report.Repositories, func(i, j int) bool { return report.Repositories[i].Evidence > report.Repositories[j].Evidence })
 	return report, nil
