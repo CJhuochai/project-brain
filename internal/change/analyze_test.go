@@ -44,6 +44,14 @@ func TestFilesReadsSingleLocalCommit(t *testing.T) {
 	}
 }
 
+func TestFilesReadsBaselineFilePath(t *testing.T) {
+	root, _, _ := changeFixture(t)
+	files, err := Files(root, "entry-service/EntryController.java")
+	if err != nil || len(files) != 1 || files[0].Repository != "entry-service" || files[0].Path != "EntryController.java" {
+		t.Fatalf("files=%#v err=%v", files, err)
+	}
+}
+
 func changeFixture(t *testing.T) (string, string, string) {
 	t.Helper()
 	root := t.TempDir()
