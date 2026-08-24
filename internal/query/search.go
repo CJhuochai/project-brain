@@ -56,3 +56,24 @@ ORDER BY repository_id, path, line`, needle, needle)
 	}
 	return results, fileRows.Err()
 }
+
+func FileEvidence(db *storage.DB, repository, path string) ([]Evidence, error) {
+	rows, err := db.Query(`
+SELECT repository_id, path, line, name, kind, 'certain' FROM symbols WHERE repository_id = ? AND path = ?
+UNION ALL
+SELECT repository_id, path, line, target, kind, confidence FROM edges WHERE repository_id = ? AND path = ?
+ORDER BY line`, repository, path, repository, path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var results []Evidence
+	for rows.Next() {
+		var item Evidence
+		if err := rows.Scan(&item.Repository, &item.File, &item.Line, &item.Name, &item.Kind, &item.Confidence); err != nil {
+			return nil, err
+		}
+		results = append(results, item)
+	}
+	return results, rows.Err()
+}
