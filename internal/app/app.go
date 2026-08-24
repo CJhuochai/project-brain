@@ -49,7 +49,7 @@ func Run(args []string, output io.Writer) error {
 			if err != nil {
 				return err
 			}
-			result = append(result, statusRepository{Repository: repository, FileCount: record.FileCount, IndexedAt: record.IndexedAt})
+			result = append(result, statusRepository{Repository: repository, FileCount: record.FileCount, DiagnosticCount: record.DiagnosticCount, IndexedAt: record.IndexedAt})
 		}
 		return json.NewEncoder(output).Encode(result)
 	case "search", "trace", "impact":
@@ -87,8 +87,9 @@ func Run(args []string, output io.Writer) error {
 
 type statusRepository struct {
 	workspace.Repository
-	FileCount int    `json:"file_count"`
-	IndexedAt string `json:"indexed_at,omitempty"`
+	FileCount       int    `json:"file_count"`
+	DiagnosticCount int    `json:"diagnostic_count"`
+	IndexedAt       string `json:"indexed_at,omitempty"`
 }
 
 func openDB(root string) (*storage.DB, error) {

@@ -7,14 +7,17 @@ import (
 )
 
 var (
-	packagePattern   = regexp.MustCompile(`^\s*package\s+([\w.]+)\s*;`)
-	typePattern      = regexp.MustCompile(`\b(class|interface|enum)\s+(\w+)`)
-	fieldPattern     = regexp.MustCompile(`\b(?:private|protected)\s+(?:final\s+)?([A-Z]\w*)\s+\w+`)
-	routePattern     = regexp.MustCompile(`@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*"([^"]+)"`)
-	namespacePattern = regexp.MustCompile(`(?i)<mapper\s+[^>]*namespace\s*=\s*"([^"]+)"`)
-	statementPattern = regexp.MustCompile(`(?i)<(select|insert|update|delete)\s+[^>]*id\s*=\s*"([^"]+)"`)
-	tablePattern     = regexp.MustCompile(`(?i)\b(from|join|update|into)\s+[` + "`" + `"]?([a-zA-Z0-9_]+)`)
-	artifactPattern  = regexp.MustCompile(`(?is)<artifactId>\s*([^<\s]+)\s*</artifactId>`)
+	packagePattern    = regexp.MustCompile(`^\s*package\s+([\w.]+)\s*;`)
+	typePattern       = regexp.MustCompile(`\b(class|interface|enum)\s+(\w+)`)
+	fieldPattern      = regexp.MustCompile(`\b(?:private|protected)\s+(?:final\s+)?([A-Z]\w*)\s+\w+`)
+	importPattern     = regexp.MustCompile(`^\s*import\s+([\w.]+)\s*;`)
+	implementsPattern = regexp.MustCompile(`\b(?:extends|implements)\s+([\w.,\s]+)`)
+	feignPattern      = regexp.MustCompile(`@FeignClient\s*\(\s*(?:name|value)\s*=\s*"([^"]+)"`)
+	routePattern      = regexp.MustCompile(`@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*"([^"]+)"`)
+	namespacePattern  = regexp.MustCompile(`(?i)<mapper\s+[^>]*namespace\s*=\s*"([^"]+)"`)
+	statementPattern  = regexp.MustCompile(`(?i)<(select|insert|update|delete)\s+[^>]*id\s*=\s*"([^"]+)"`)
+	tablePattern      = regexp.MustCompile(`(?i)\b(from|join|update|into)\s+[` + "`" + `"]?([a-zA-Z0-9_]+)`)
+	artifactPattern   = regexp.MustCompile(`(?is)<artifactId>\s*([^<\s]+)\s*</artifactId>`)
 )
 
 func File(path string, content []byte) Result {
@@ -62,6 +65,9 @@ func extractJava(content []byte) Result {
 		if strings.Contains(line, "@Repository") {
 			componentKind = "repository"
 		}
+		if strings.Contains(line, "@Mapper") {
+			componentKind = "mapper"
+		}
 		if match := typePattern.FindStringSubmatch(line); match != nil {
 			currentType, currentKind = match[2], match[1]
 			name := currentType
@@ -82,6 +88,23 @@ func extractJava(content []byte) Result {
 					result.Edges = append(result.Edges, Edge{Source: name, Target: field[1], Kind: "uses", Line: fieldIndex + 1, Confidence: Probable})
 				}
 			}
+			for importIndex, importLine := range lines {
+				if imported := importPattern.FindStringSubmatch(importLine); imported != nil {
+					result.Edges = append(result.Edges, Edge{Source: name, Target: imported[1], Kind: "imports", Line: importIndex + 1, Confidence: Certain})
+				}
+			}
+			if relation := implementsPattern.FindStringSubmatch(line); relation != nil {
+				for _, target := range strings.Split(relation[1], ",") {
+					if target = strings.TrimSpace(target); target != "" {
+						result.Edges = append(result.Edges, Edge{Source: name, Target: target, Kind: "implements", Line: index + 1, Confidence: Probable})
+					}
+				}
+			}
+			for feignIndex, feignLine := range lines {
+				if feign := feignPattern.FindStringSubmatch(feignLine); feign != nil {
+					result.Edges = append(result.Edges, Edge{Source: name, Target: "feign:" + feign[1], Kind: "feign_client", Line: feignIndex + 1, Confidence: Certain})
+				}
+			}
 			return result
 		}
 	}
@@ -95,7 +118,7 @@ func extractMapper(content []byte) Result {
 		namespace = match[1]
 	}
 	if namespace == "" {
-		return Result{}
+		return Result{Diagnostics: []Diagnostic{{Message: "MyBatis XML 缺少 mapper namespace，未生成关系", Line: 1, Confidence: Unresolved}}}
 	}
 	result := Result{Symbols: []Symbol{{Name: namespace, Kind: "mapper", Line: 1}}}
 	for _, statement := range statementPattern.FindAllStringSubmatchIndex(text, -1) {

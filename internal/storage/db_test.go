@@ -11,7 +11,7 @@ func TestOpenRebuildsOldSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`PRAGMA user_version = 4`); err != nil {
+	if _, err := db.Exec(`PRAGMA user_version = 5`); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -23,7 +23,7 @@ func TestOpenRebuildsOldSchema(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	var version int
-	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != 5 {
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != 6 {
 		t.Fatalf("version=%d err=%v", version, err)
 	}
 }
