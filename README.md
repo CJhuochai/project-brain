@@ -56,7 +56,19 @@ bin\project-brain.exe impact E:\ExampleWorkspace com.example.EntryService
 bin\project-brain.exe mcp E:\ExampleWorkspace
 ```
 
-支持 `workspace_status`、`find_business_context`、`trace_code_path`、`analyze_change_impact`、`analyze_change`、`analyze_requirement` 与 `get_evidence`。
+支持 `workspace_status`、`find_business_context`、`trace_code_path`、`analyze_change_impact`、`analyze_change`、`analyze_requirement`、`analyze_inputs`、`get_analysis_report`、`record_analysis_feedback` 与 `get_evidence`。
+
+## 1.1 日常需求闭环
+
+把需求文档、HTML 原型、Figma 本地 JSON 导出或 DOCX 放在本机后执行：
+
+```powershell
+bin\project-brain.exe analyze E:\ExampleWorkspace C:\local\entry-requirement.docx C:\local\prototype.html
+bin\project-brain.exe report E:\ExampleWorkspace <报告ID>
+bin\project-brain.exe feedback E:\ExampleWorkspace <报告ID> repository entry-service rule "人工确认"
+```
+
+`analyze_inputs` 是对应的 MCP 工具，接收 `text`、本地 `paths` 与可选 `source_ref`。结果包含候选项目/模块、建议分支（仅建议，不创建 Git 分支）、文件/方法证据、测试点、风险和输入摘要；原始附件不会被复制或上传。人工反馈只写入本机索引库，并会在下一次分析时按精确项目规则显示。
 
 复制 [examples/codex-config.toml](examples/codex-config.toml) 的配置，按本机二进制与工作区路径修改后添加到 Codex 配置并重启客户端。Windows 的 `command` 指向 `.exe`；macOS/Linux 指向已 `chmod +x` 的对应二进制，例如：
 
