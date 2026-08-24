@@ -1,7 +1,10 @@
 package indexer
 
 import (
+	"archive/tar"
 	"bytes"
+	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -27,26 +30,66 @@ func Index(root string, db *storage.DB) (Result, error) {
 			continue
 		}
 		result.Repositories++
-		paths, err := baselinePaths(repository)
+		indexed, changed, err := indexRepository(repository, db)
 		if err != nil {
 			return Result{}, err
 		}
-		for _, path := range paths {
-			content, err := gitBytes(repository.Path, "show", repository.BaselineCommit+":"+path)
-			if err != nil {
-				return Result{}, err
-			}
-			changed, err := db.UpsertFile(repository.Path, path, content)
-			if err != nil {
-				return Result{}, err
-			}
-			result.IndexedFiles++
-			if changed {
-				result.ChangedFiles++
-			}
-		}
+		result.IndexedFiles += indexed
+		result.ChangedFiles += changed
 	}
 	return result, nil
+}
+
+func indexRepository(repository workspace.Repository, db *storage.DB) (int, int, error) {
+	command := exec.Command("git", "-C", repository.Path, "archive", "--format=tar", repository.BaselineCommit)
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		return 0, 0, err
+	}
+	if err := command.Start(); err != nil {
+		return 0, 0, err
+	}
+	reader := tar.NewReader(stdout)
+	indexed, changed := 0, 0
+	for {
+		header, nextErr := reader.Next()
+		if nextErr == io.EOF {
+			break
+		}
+		if nextErr != nil {
+			_ = command.Wait()
+			return 0, 0, fmt.Errorf("read archive %s: %w", repository.Name, nextErr)
+		}
+		if header.Typeflag != tar.TypeReg || !isSupported(header.Name) {
+			continue
+		}
+		content, readErr := io.ReadAll(reader)
+		if readErr != nil {
+			_ = command.Wait()
+			return 0, 0, readErr
+		}
+		fileChanged, upsertErr := db.UpsertFile(repository.Path, header.Name, content)
+		if upsertErr != nil {
+			_ = command.Wait()
+			return 0, 0, upsertErr
+		}
+		indexed++
+		if fileChanged {
+			changed++
+		}
+	}
+	if _, err := io.Copy(io.Discard, stdout); err != nil {
+		_ = command.Wait()
+		return 0, 0, err
+	}
+	if err := command.Wait(); err != nil {
+		return 0, 0, err
+	}
+	return indexed, changed, nil
+}
+
+func readBaselineFile(repositoryPath, commit, path string) ([]byte, error) {
+	return gitBytes(repositoryPath, "cat-file", "blob", commit+":"+path)
 }
 
 func baselinePaths(repository workspace.Repository) ([]string, error) {
