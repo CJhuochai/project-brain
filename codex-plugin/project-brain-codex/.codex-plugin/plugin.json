@@ -11,6 +11,8 @@
     "developerName": "CJhuochai",
     "category": "Productivity",
     "capabilities": [],
+    "composerIcon": "./assets/chenpi-brain.png",
+    "logo": "./assets/chenpi-brain.png",
     "defaultPrompt": "分析这份需求涉及哪些项目、代码入口和影响点。"
   }
 }
