@@ -35,7 +35,15 @@ MCP 工具调用前会比较本机 `origin/HEAD` 与已索引 commit：基线变
 bin\project-brain.exe mcp E:\BasisProject
 ```
 
-支持 `workspace_status`、`find_business_context`、`trace_code_path`、`analyze_change_impact`、`analyze_requirement` 和 `get_evidence` 六个工具。Codex 的配置样例见 [examples/codex-config.toml](examples/codex-config.toml)，需要按本机路径修改；本工具不会修改你的 Codex 配置。
+支持 `workspace_status`、`find_business_context`、`trace_code_path`、`analyze_change_impact`、`analyze_change`、`analyze_requirement` 和 `get_evidence`。其中 `analyze_change` 接收默认基线文件路径、单个本地 commit 或 `base..target`，只读本地 Git 对象。Codex 的配置样例见 [examples/codex-config.toml](examples/codex-config.toml)，需要按本机路径修改；本工具不会修改你的 Codex 配置。
+
+## 安装与升级
+
+1. 运行 `go build -o bin\project-brain.exe ./cmd/project-brain`，或下载对应 Windows 单文件。
+2. 复制 [examples/codex-config.toml](examples/codex-config.toml) 中的配置，按本机二进制和工作区路径修改后添加到 Codex 配置。
+3. 重启 MCP 客户端；首次调用会在 `%LOCALAPPDATA%\ProjectBrain` 建立本地索引。
+
+升级时替换二进制并重启 MCP 客户端即可；删除 `%LOCALAPPDATA%\ProjectBrain\workspaces\<工作区哈希>` 可清除该工作区索引，不会影响业务源码。
 
 可选的 Codex 适配插件位于 `codex-plugin/project-brain-codex`。它不包含索引或业务源码，只规定：收到需求文档、原型或二次开发请求时，优先调用 `analyze_requirement` 再给出代码方案。
 
