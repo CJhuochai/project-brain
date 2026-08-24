@@ -23,6 +23,7 @@ type AnalysisReport struct {
 	RecommendedBranches []string                          `json:"recommended_branches"`
 	TestPoints          []string                          `json:"test_points"`
 	Feedback            []storage.Rule                    `json:"feedback,omitempty"`
+	InputDiagnostics    []input.Diagnostic                `json:"input_diagnostics,omitempty"`
 	requirement.Report
 }
 
@@ -35,10 +36,19 @@ func AnalyzeRequirement(db *storage.DB, source input.Result) (AnalysisReport, er
 	if err != nil {
 		return AnalysisReport{}, err
 	}
-	report := AnalysisReport{ID: uuid.NewString(), CreatedAt: time.Now().UTC().Format(time.RFC3339), InputFacts: source.Facts, Modules: base.Repositories, Report: base}
-	for _, module := range report.Modules {
+	snapshots, err := db.BaselineSnapshots()
+	if err != nil {
+		return AnalysisReport{}, err
+	}
+	report := AnalysisReport{ID: uuid.NewString(), CreatedAt: time.Now().UTC().Format(time.RFC3339), BaselineSnapshot: strings.Join(snapshots, ","), InputFacts: source.Facts, InputDiagnostics: source.Diagnostics, Modules: base.Repositories, Report: base}
+	if len(report.Modules) > 0 {
 		report.RecommendedBranches = append(report.RecommendedBranches, "feature/"+report.ID[:8])
+	}
+	for _, module := range report.Modules {
 		report.TestPoints = append(report.TestPoints, "验证 "+module.Repository+" 的主流程与异常路径")
+	}
+	for _, diagnostic := range source.Diagnostics {
+		report.Risks = append(report.Risks, diagnostic.Message)
 	}
 	if len(report.TestPoints) == 0 {
 		report.TestPoints = append(report.TestPoints, "确认需求输入是否能定位到已索引代码")

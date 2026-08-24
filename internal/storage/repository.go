@@ -24,3 +24,20 @@ func (db *DB) RepositoryRecord(repositoryID string) (RepositoryRecord, error) {
 	}
 	return record, err
 }
+
+func (db *DB) BaselineSnapshots() ([]string, error) {
+	rows, err := db.Query(`SELECT repository_id, baseline_branch, baseline_commit, baseline_state FROM repositories ORDER BY repository_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var snapshots []string
+	for rows.Next() {
+		var repository, branch, commit, state string
+		if err := rows.Scan(&repository, &branch, &commit, &state); err != nil {
+			return nil, err
+		}
+		snapshots = append(snapshots, repository+"@"+branch+":"+commit+":"+state)
+	}
+	return snapshots, rows.Err()
+}
