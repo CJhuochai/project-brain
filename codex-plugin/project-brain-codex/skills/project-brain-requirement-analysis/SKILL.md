@@ -5,8 +5,8 @@ description: 当用户提供需求文档、交互原型、功能改造，或本�
 
 # Project Brain 需求分析
 
-如果 `project_brain` MCP 工具可用：需求文档、原型或功能改造先调用 `analyze_requirement`，输入业务描述、路由、字段或标题；提交号、基线文件或分支变更先调用 `analyze_change`。根据候选结果再按需调用 `find_business_context`、`trace_code_path`、`analyze_change_impact`。
+如果 `project_brain` MCP 工具可用：有本地需求文档、原型、截图或 Figma JSON 导出时，先调用 `analyze_inputs`，传入文字和本地文件路径；只有文字时调用 `analyze_requirement`。提交号、基线文件或分支变更先调用 `analyze_change`。根据候选结果再按需调用 `get_analysis_report`、`find_business_context`、`trace_code_path`、`analyze_change_impact`。
 
-输出时区分确定证据和可能关系，说明涉及仓库、入口、关联点与风险；不得将未解析到的动态关系写成事实。代码修改前先给出方案并等待用户确认。
+输出时区分确定证据和可能关系，说明涉及仓库、入口、关联点、建议分支、测试点与风险；不得将未解析到的动态关系写成事实。用户确认或拒绝候选项时，使用 `record_analysis_feedback` 回写本地规则。代码修改前先给出方案并等待用户确认。
 
 如果 MCP 不可用，简要说明知识库工具未加载，再按普通源码分析流程继续；不要假装已经使用知识库。

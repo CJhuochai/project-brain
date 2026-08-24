@@ -54,7 +54,19 @@ Every command returns JSON. `trace` follows a symbol only when it is unique; amb
 bin\project-brain.exe mcp E:\BasisProject
 ```
 
-Supported tools: `workspace_status`, `find_business_context`, `trace_code_path`, `analyze_change_impact`, `analyze_change`, `analyze_requirement`, and `get_evidence`.
+Supported tools: `workspace_status`, `find_business_context`, `trace_code_path`, `analyze_change_impact`, `analyze_change`, `analyze_requirement`, `analyze_inputs`, `get_analysis_report`, `record_analysis_feedback`, and `get_evidence`.
+
+## 1.1 requirement loop
+
+Keep requirement documents, HTML prototypes, local Figma JSON exports, or DOCX files on the local machine:
+
+```powershell
+bin\project-brain.exe analyze E:\BasisProject C:\local\entry-requirement.docx C:\local\prototype.html
+bin\project-brain.exe report E:\BasisProject <report-id>
+bin\project-brain.exe feedback E:\BasisProject <report-id> repository entry-service rule "confirmed"
+```
+
+The MCP equivalent is `analyze_inputs`, with `text`, local `paths`, and optional `source_ref`. Reports include modules, suggested (not created) branches, file/method evidence, test points, risks, and an input digest. Attachments are never copied or uploaded. Feedback writes only to the local index and is applied as an exact rule in later analyses.
 
 Copy [examples/codex-config.toml](examples/codex-config.toml), update the local binary and workspace paths, then add it to Codex and restart the MCP client. On Windows `command` targets the `.exe`; on macOS/Linux it targets the matching executable after `chmod +x`:
 
