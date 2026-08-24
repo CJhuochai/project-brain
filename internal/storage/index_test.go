@@ -85,3 +85,21 @@ func TestUpsertFileTxKeepsMultipleFilesSearchableAfterCommit(t *testing.T) {
 		t.Fatalf("paths=%#v err=%v", paths, err)
 	}
 }
+
+func TestRecordIndexReturnsFileCountAndTime(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.UpsertFile("repo", "A.java", []byte("class A {}")); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RecordIndex("repo", "main", "abc", "baseline_known"); err != nil {
+		t.Fatal(err)
+	}
+	record, err := db.RepositoryRecord("repo")
+	if err != nil || record.FileCount != 1 || record.IndexedAt == "" {
+		t.Fatalf("record=%#v err=%v", record, err)
+	}
+}

@@ -32,3 +32,33 @@ func TestSearchReturnsEvidenceForRouteAndSymbol(t *testing.T) {
 		t.Fatalf("missing source evidence: %#v", items[0])
 	}
 }
+
+func TestTraceAndImpactFollowStoredEvidence(t *testing.T) {
+	db, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := extract.Result{
+		Symbols: []extract.Symbol{{Name: "com.example.EntryController", Kind: "controller", Line: 1}, {Name: "com.example.EntryService", Kind: "service", Line: 1}, {Name: "com.example.EntryMapper", Kind: "mapper", Line: 1}},
+		Edges:   []extract.Edge{{Source: "com.example.EntryController", Target: "EntryService", Kind: "uses", Line: 2, Confidence: extract.Probable}, {Source: "com.example.EntryService", Target: "EntryMapper", Kind: "uses", Line: 2, Confidence: extract.Probable}},
+	}
+	if err := db.ReplaceEvidenceTx(tx, "repo", "Entry.java", result); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	trace, err := Trace(db, "EntryController", 3)
+	if err != nil || len(trace.Paths) != 1 || len(trace.Paths[0]) != 2 {
+		t.Fatalf("trace=%#v err=%v", trace, err)
+	}
+	impact, err := Impact(db, "com.example.EntryMapper", 3)
+	if err != nil || len(impact.Relations) != 2 {
+		t.Fatalf("impact=%#v err=%v", impact, err)
+	}
+}
