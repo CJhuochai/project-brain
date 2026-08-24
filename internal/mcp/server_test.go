@@ -138,8 +138,28 @@ func TestServeIgnoresInitializedNotificationAndPublishesInputSchemas(t *testing.
 		t.Fatal(err)
 	}
 	for _, tool := range response.Result.Tools {
-		if tool.InputSchema["type"] != "object" || tool.Annotations["readOnlyHint"] != true {
+		readOnly := tool.Name != "record_analysis_feedback"
+		if tool.InputSchema["type"] != "object" || tool.Annotations["readOnlyHint"] != readOnly {
 			t.Fatalf("tool %s missing MCP contract: %#v", tool.Name, tool)
+		}
+	}
+}
+
+func TestToolsExposeReportLoopContracts(t *testing.T) {
+	listed := tools()
+	for _, want := range []struct {
+		name     string
+		readOnly bool
+	}{{"analyze_inputs", true}, {"get_analysis_report", true}, {"record_analysis_feedback", false}} {
+		found := false
+		for _, tool := range listed {
+			if tool["name"] == want.name && tool["annotations"].(map[string]bool)["readOnlyHint"] == want.readOnly {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing tool %s: %#v", want.name, listed)
 		}
 	}
 }
