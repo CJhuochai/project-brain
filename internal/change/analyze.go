@@ -23,9 +23,6 @@ type Report struct {
 }
 
 func Files(root, revision string) ([]File, error) {
-	if !strings.Contains(revision, "..") {
-		return nil, fmt.Errorf("变更范围必须是本地 Git commit 或 base..target")
-	}
 	repositories, err := workspace.Discover(root)
 	if err != nil {
 		return nil, err
@@ -35,7 +32,11 @@ func Files(root, revision string) ([]File, error) {
 		if repository.BaselineState != workspace.BaselineKnown {
 			continue
 		}
-		output, diffErr := exec.Command("git", "-C", repository.Path, "diff", "--name-only", revision).Output()
+		args := []string{"-C", repository.Path, "show", "--format=", "--name-only", revision}
+		if strings.Contains(revision, "..") {
+			args = []string{"-C", repository.Path, "diff", "--name-only", revision}
+		}
+		output, diffErr := exec.Command("git", args...).Output()
 		if diffErr != nil {
 			continue
 		}
