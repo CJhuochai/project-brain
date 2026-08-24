@@ -28,6 +28,7 @@ type Report struct {
 var tokenPattern = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_/-]*`)
 
 const maxImpactTraces = 8
+const maxEvidence = 200
 
 func Analyze(db *storage.DB, text string) (Report, error) {
 	report := Report{}
@@ -43,7 +44,14 @@ func Analyze(db *storage.DB, text string) (Report, error) {
 		if err != nil {
 			return report, err
 		}
-		report.Evidence = append(report.Evidence, items...)
+		if remaining := maxEvidence - len(report.Evidence); remaining > 0 {
+			if len(items) > remaining {
+				items = items[:remaining]
+			}
+			report.Evidence = append(report.Evidence, items...)
+		} else {
+			items = nil
+		}
 		for _, item := range items {
 			counts[item.Repository]++
 			if isEntryPoint(item.Kind) {
