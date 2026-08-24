@@ -98,6 +98,9 @@ func indexRepository(repository workspace.Repository, db *storage.DB) (int, int,
 	if err := transaction.Commit(); err != nil {
 		return 0, 0, err
 	}
+	if err := db.RecordIndex(repository.Path, repository.BaselineBranch, repository.BaselineCommit, string(repository.BaselineState)); err != nil {
+		return 0, 0, err
+	}
 	return indexed, changed, nil
 }
 

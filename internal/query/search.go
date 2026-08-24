@@ -13,6 +13,8 @@ type Evidence struct {
 	Name       string `json:"name"`
 	Kind       string `json:"kind"`
 	Confidence string `json:"confidence"`
+	Source     string `json:"source,omitempty"`
+	Target     string `json:"target,omitempty"`
 }
 
 func Search(db *storage.DB, text string) ([]Evidence, error) {
