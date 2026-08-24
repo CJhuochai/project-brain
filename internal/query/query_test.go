@@ -1,6 +1,7 @@
 package query
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/CJhuochai/project-brain/internal/extract"
@@ -30,6 +31,32 @@ func TestSearchReturnsEvidenceForRouteAndSymbol(t *testing.T) {
 	}
 	if items[0].File == "" || items[0].Line == 0 {
 		t.Fatalf("missing source evidence: %#v", items[0])
+	}
+}
+
+func TestTraceLimitsBranchingPaths(t *testing.T) {
+	db, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	edges := make([]extract.Edge, 21)
+	for i := range edges {
+		edges[i] = extract.Edge{Source: "com.example.Root", Target: fmt.Sprintf("Leaf%d", i), Kind: "calls", Line: i + 1, Confidence: extract.Certain}
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.ReplaceEvidenceTx(tx, "repo", "Root.java", extract.Result{Symbols: []extract.Symbol{{Name: "com.example.Root", Kind: "service", Line: 1}}, Edges: edges}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	trace, err := Trace(db, "Root", 2)
+	if err != nil || len(trace.Paths) > 20 {
+		t.Fatalf("trace=%#v err=%v", trace, err)
 	}
 }
 

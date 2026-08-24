@@ -17,6 +17,7 @@ go build -o bin\project-brain.exe ./cmd/project-brain
 ```powershell
 bin\project-brain.exe discover E:\ExampleWorkspace
 bin\project-brain.exe index E:\ExampleWorkspace
+bin\project-brain.exe refresh E:\ExampleWorkspace
 bin\project-brain.exe status E:\ExampleWorkspace
 bin\project-brain.exe search E:\ExampleWorkspace groupSubmit
 bin\project-brain.exe trace E:\ExampleWorkspace com.example.EntryController
@@ -35,7 +36,7 @@ MCP 工具调用前会比较本机 `origin/HEAD` 与已索引 commit：基线变
 bin\project-brain.exe mcp E:\ExampleWorkspace
 ```
 
-支持 `workspace_status`、`find_business_context`、`trace_code_path`、`analyze_change_impact`、`analyze_change`、`analyze_requirement` 和 `get_evidence`。其中 `analyze_change` 接收默认基线文件路径、单个本地 commit 或 `base..target`，只读本地 Git 对象。Codex 的配置样例见 [examples/codex-config.toml](examples/codex-config.toml)，需要按本机路径修改；本工具不会修改你的 Codex 配置。
+支持 `workspace_status`、`find_business_context`、`trace_code_path`、`analyze_change_impact`、`analyze_change`、`analyze_requirement` 和 `get_evidence`。其中 `analyze_change` 接收默认基线文件路径、单个本地 commit 或 `base..target`，只读本地 Git 对象；传入单个 commit 可精确定位该提交所在仓库，`HEAD~1..HEAD` 这类相对范围会在每个仓库分别解释。Codex 的配置样例见 [examples/codex-config.toml](examples/codex-config.toml)，需要按本机路径修改；本工具不会修改你的 Codex 配置。
 
 ## 安装与升级
 

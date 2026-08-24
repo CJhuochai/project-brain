@@ -27,6 +27,8 @@ type Report struct {
 
 var tokenPattern = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_/-]*`)
 
+const maxImpactTraces = 8
+
 func Analyze(db *storage.DB, text string) (Report, error) {
 	report := Report{}
 	counts := map[string]int{}
@@ -44,21 +46,49 @@ func Analyze(db *storage.DB, text string) (Report, error) {
 		report.Evidence = append(report.Evidence, items...)
 		for _, item := range items {
 			counts[item.Repository]++
-			if item.Kind == "controller_method" || item.Kind == "route" || item.Kind == "mapper_statement" {
+			if isEntryPoint(item.Kind) {
 				report.EntryPoints = append(report.EntryPoints, item)
 			}
-			if item.Kind != "text" {
+			if isChangePoint(item.Kind) {
 				report.ChangePoints = append(report.ChangePoints, item)
+			}
+		}
+	}
+	files := map[string]bool{}
+	for _, item := range report.Evidence {
+		if item.Kind != "text" {
+			continue
+		}
+		key := item.Repository + "\x00" + item.File
+		if files[key] {
+			continue
+		}
+		files[key] = true
+		related, err := query.FileEvidence(db, item.Repository, item.File)
+		if err != nil {
+			return report, err
+		}
+		for _, candidate := range related {
+			if isEntryPoint(candidate.Kind) {
+				report.EntryPoints = append(report.EntryPoints, candidate)
+			}
+			if isChangePoint(candidate.Kind) {
+				report.ChangePoints = append(report.ChangePoints, candidate)
 			}
 		}
 	}
 	for repository, count := range counts {
 		report.Repositories = append(report.Repositories, RepositoryCandidate{Repository: repository, Evidence: count})
 	}
+	traced := 0
 	for _, entry := range report.EntryPoints {
-		if entry.Name == "" {
+		if entry.Name == "" || !isTraceTarget(entry.Kind) {
 			continue
 		}
+		if traced == maxImpactTraces {
+			break
+		}
+		traced++
 		trace, err := query.Trace(db, entry.Name, 6)
 		if err != nil {
 			return report, err
@@ -83,6 +113,18 @@ func Analyze(db *storage.DB, text string) (Report, error) {
 	return report, nil
 }
 
+func isEntryPoint(kind string) bool {
+	return kind == "controller_method" || kind == "route" || kind == "mapper_statement"
+}
+
+func isChangePoint(kind string) bool {
+	return isEntryPoint(kind) || kind == "service_method" || kind == "application_method" || kind == "calls" || kind == "queries_table"
+}
+
+func isTraceTarget(kind string) bool {
+	return kind == "controller_method" || kind == "mapper_statement"
+}
+
 func keywords(text string) []string {
 	var result []string
 	for _, token := range tokenPattern.FindAllString(text, -1) {
@@ -92,8 +134,11 @@ func keywords(text string) []string {
 	}
 	var han []rune
 	flush := func() {
-		for index := 0; index+1 < len(han); index++ {
-			result = append(result, string(han[index:index+2]))
+		if len(han) == 2 {
+			result = append(result, string(han))
+		}
+		for index := 0; index+2 < len(han); index++ {
+			result = append(result, string(han[index:index+3]))
 		}
 		han = nil
 	}

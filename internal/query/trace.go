@@ -18,6 +18,8 @@ type ImpactResult struct {
 	Relations []Evidence `json:"relations,omitempty"`
 }
 
+const maxTracePaths = 20
+
 func Trace(db *storage.DB, target string, maxDepth int) (TraceResult, error) {
 	result := TraceResult{Target: target}
 	starts, err := symbols(db, target)
@@ -101,6 +103,9 @@ func walk(db *storage.DB, start string, maxDepth int, reverse bool) ([][]Evidenc
 	var paths [][]Evidence
 	var visit func(string, int, []Evidence) error
 	visit = func(current string, depth int, path []Evidence) error {
+		if len(paths) == maxTracePaths {
+			return nil
+		}
 		if depth == maxDepth {
 			if len(path) > 0 {
 				paths = append(paths, path)
