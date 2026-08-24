@@ -36,5 +36,23 @@ ORDER BY repository_id, path, line`, needle, needle)
 		}
 		results = append(results, item)
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	fileRows, err := db.Query(`SELECT repository_id, path, content FROM files WHERE lower(content) LIKE ? ORDER BY repository_id, path`, needle)
+	if err != nil {
+		return nil, err
+	}
+	defer fileRows.Close()
+	for fileRows.Next() {
+		var item Evidence
+		var content string
+		if err := fileRows.Scan(&item.Repository, &item.File, &content); err != nil {
+			return nil, err
+		}
+		item.Name, item.Kind, item.Confidence = text, "text", "certain"
+		item.Line = strings.Count(content[:strings.Index(strings.ToLower(content), strings.ToLower(text))], "\n") + 1
+		results = append(results, item)
+	}
+	return results, fileRows.Err()
 }

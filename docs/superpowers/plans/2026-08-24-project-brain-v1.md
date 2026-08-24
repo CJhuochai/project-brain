@@ -6,7 +6,7 @@
 
 **架构：** 单一 Go 二进制将 CLI、SQLite/FTS5 存储、只读 Git 发现、Java/Spring/MyBatis 文本结构提取及 stdio MCP Server 组合在一起。所有状态放在用户本地数据目录；业务工作区只读。第一版不使用网络、Docker、向量库或图数据库服务。
 
-**技术栈：** Go 1.25、cobra、modernc.org/sqlite、标准库 XML/JSON、MCP stdio JSON-RPC。
+**技术栈：** Go 1.25、标准库命令解析/XML/JSON、modernc.org/sqlite、MCP stdio JSON-RPC。
 
 **规格：** `docs/superpowers/specs/2026-08-24-project-brain-v1-design.md`
 

@@ -50,6 +50,13 @@ class EntryService {
 	}
 }
 
+func TestFileExtractsMavenModuleDependency(t *testing.T) {
+	result := File("pom.xml", []byte(`<project><artifactId>entry-service</artifactId><dependencies><dependency><artifactId>common-core</artifactId></dependency></dependencies></project>`))
+	if !hasSymbol(result.Symbols, "maven:entry-service", "maven_module") || !hasEdge(result.Edges, "depends_on_module", "maven:common-core", Certain) {
+		t.Fatalf("maven evidence=%#v", result)
+	}
+}
+
 func hasSymbol(symbols []Symbol, name, kind string) bool {
 	for _, symbol := range symbols {
 		if symbol.Name == name && symbol.Kind == kind {

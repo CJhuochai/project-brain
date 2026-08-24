@@ -1,0 +1,4 @@
+# 按本机实际路径修改；不要提交真实业务工作区或令牌。
+[mcp_servers.project_brain]
+command = "C:\\path\\to\\project-brain.exe"
+args = ["mcp", "E:\\BasisProject"]
