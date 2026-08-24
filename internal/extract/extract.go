@@ -7,20 +7,26 @@ import (
 )
 
 var (
-	packagePattern    = regexp.MustCompile(`^\s*package\s+([\w.]+)\s*;`)
-	typePattern       = regexp.MustCompile(`\b(class|interface|enum)\s+(\w+)`)
-	fieldPattern      = regexp.MustCompile(`\b(?:private|protected)\s+(?:final\s+)?([A-Z]\w*)\s+\w+`)
-	importPattern     = regexp.MustCompile(`^\s*import\s+([\w.]+)\s*;`)
-	implementsPattern = regexp.MustCompile(`\b(?:extends|implements)\s+([\w.,\s]+)`)
-	feignPattern      = regexp.MustCompile(`@FeignClient\s*\(\s*(?:name|value)\s*=\s*"([^"]+)"`)
-	routePattern      = regexp.MustCompile(`@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*"([^"]+)"`)
-	javaFieldPattern  = regexp.MustCompile(`(?m)^\s*(?:private|protected|public)?\s*(?:static\s+)?(?:final\s+)?([A-Z]\w*(?:\s*<[^;=(){}]+>)?)\s+(\w+)\s*(?:=[^;]*)?;`)
-	javaMethodPattern = regexp.MustCompile(`(?m)(?:^\s*@[\w.]+(?:\s*\([^)]*\))?\s*)*(?:^\s*(?:public|protected|private)\s+)?(?:static\s+)?[\w.<>\[\], ?]+\s+(\w+)\s*\([^;{}]*\)\s*(?:throws\s+[\w., ]+)?\{`)
-	javaCallPattern   = regexp.MustCompile(`\b(\w+)\s*\.\s*(\w+)\s*\(`)
-	namespacePattern  = regexp.MustCompile(`(?i)<mapper\s+[^>]*namespace\s*=\s*"([^"]+)"`)
-	statementPattern  = regexp.MustCompile(`(?i)<(select|insert|update|delete)\s+[^>]*id\s*=\s*"([^"]+)"`)
-	tablePattern      = regexp.MustCompile(`(?i)\b(from|join|update|into)\s+[` + "`" + `"]?([a-zA-Z0-9_]+)`)
-	artifactPattern   = regexp.MustCompile(`(?is)<artifactId>\s*([^<\s]+)\s*</artifactId>`)
+	packagePattern     = regexp.MustCompile(`^\s*package\s+([\w.]+)\s*;`)
+	typePattern        = regexp.MustCompile(`\b(class|interface|enum)\s+(\w+)`)
+	fieldPattern       = regexp.MustCompile(`\b(?:private|protected)\s+(?:final\s+)?([A-Z]\w*)\s+\w+`)
+	importPattern      = regexp.MustCompile(`^\s*import\s+([\w.]+)\s*;`)
+	implementsPattern  = regexp.MustCompile(`\b(?:extends|implements)\s+([\w.,\s]+)`)
+	feignPattern       = regexp.MustCompile(`@FeignClient\s*\(\s*(?:name|value)\s*=\s*"([^"]+)"`)
+	routePattern       = regexp.MustCompile(`@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*"([^"]+)"`)
+	javaFieldPattern   = regexp.MustCompile(`(?m)^\s*(?:private|protected|public)?\s*(?:static\s+)?(?:final\s+)?([A-Z]\w*(?:\s*<[^;=(){}]+>)?)\s+(\w+)\s*(?:=[^;]*)?;`)
+	javaMethodPattern  = regexp.MustCompile(`(?m)(?:^\s*@[\w.]+(?:\s*\([^)]*\))?\s*)*(?:^\s*(?:public|protected|private)\s+)?(?:static\s+)?[\w.<>\[\], ?]+\s+(\w+)\s*\([^;{}]*\)\s*(?:throws\s+[\w., ]+)?\{`)
+	javaCallPattern    = regexp.MustCompile(`\b(\w+)\s*\.\s*(\w+)\s*\(`)
+	namespacePattern   = regexp.MustCompile(`(?i)<mapper\s+[^>]*namespace\s*=\s*"([^"]+)"`)
+	statementPattern   = regexp.MustCompile(`(?i)<(select|insert|update|delete)\s+[^>]*id\s*=\s*"([^"]+)"`)
+	tablePattern       = regexp.MustCompile(`(?i)\b(from|join|update|into)\s+[` + "`" + `"]?([a-zA-Z0-9_]+)`)
+	artifactPattern    = regexp.MustCompile(`(?is)<artifactId>\s*([^<\s]+)\s*</artifactId>`)
+	dubboPattern       = regexp.MustCompile(`@DubboReference(?:\s*\([^)]*\))?\s+(?:private|protected|public)?\s*(?:final\s+)?([A-Z]\w*)\s+\w+`)
+	kafkaListenPattern = regexp.MustCompile(`@(?:Kafka|RocketMQ|Rabbit)Listener\s*\([^)]*(?:topics|topic|value)\s*=\s*"([^"]+)"`)
+	publishPattern     = regexp.MustCompile(`\b(?:send|convertAndSend|syncSend)\s*\(\s*"([^"]+)"`)
+	scheduledPattern   = regexp.MustCompile(`@Scheduled\s*\([^)]*\)\s*(?:public|protected|private)?\s*(?:static\s+)?[\w.<>\[\], ?]+\s+(\w+)\s*\(`)
+	valuePattern       = regexp.MustCompile(`@Value\s*\(\s*"\$\{([^}:]+)`)
+	configPropsPattern = regexp.MustCompile(`@ConfigurationProperties\s*\(\s*(?:prefix\s*=\s*)?"([^"]+)"`)
 )
 
 func File(path string, content []byte) Result {
@@ -33,7 +39,7 @@ func File(path string, content []byte) Result {
 	if strings.EqualFold(filepath.Ext(path), ".java") {
 		return extractJava(content)
 	}
-	return Result{}
+	return extractExtended(path, content)
 }
 
 func extractMaven(content []byte) Result {
@@ -70,6 +76,30 @@ func extractJava(content []byte) Result {
 		if feign := feignPattern.FindStringSubmatch(line); feign != nil {
 			result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: "feign:" + feign[1], Kind: "feign_client", Line: index + 1, Confidence: Certain})
 		}
+	}
+	for _, match := range dubboPattern.FindAllStringSubmatchIndex(text, -1) {
+		result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: "dubbo:" + text[match[2]:match[3]], Kind: "dubbo_reference", Line: lineAt(text, match[0]), Confidence: Certain})
+	}
+	for _, match := range kafkaListenPattern.FindAllStringSubmatchIndex(text, -1) {
+		result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: "mq:" + text[match[2]:match[3]], Kind: "consumes_topic", Line: lineAt(text, match[0]), Confidence: Certain})
+	}
+	for _, match := range publishPattern.FindAllStringSubmatchIndex(text, -1) {
+		result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: "mq:" + text[match[2]:match[3]], Kind: "publishes_topic", Line: lineAt(text, match[0]), Confidence: Certain})
+	}
+	for _, match := range scheduledPattern.FindAllStringSubmatchIndex(text, -1) {
+		result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: "schedule:" + typeName + "#" + text[match[2]:match[3]], Kind: "scheduled_job", Line: lineAt(text, match[0]), Confidence: Certain})
+	}
+	if strings.Contains(masked[:typeMatch[0]], "@DubboService") {
+		result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: "dubbo:" + typeName, Kind: "dubbo_service", Line: lineAt(text, typeMatch[0]), Confidence: Certain})
+	}
+	for _, match := range valuePattern.FindAllStringSubmatchIndex(text, -1) {
+		result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: "config:" + text[match[2]:match[3]], Kind: "uses_config", Line: lineAt(text, match[0]), Confidence: Certain})
+	}
+	for _, match := range configPropsPattern.FindAllStringSubmatchIndex(text, -1) {
+		result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: "config:" + text[match[2]:match[3]], Kind: "uses_config", Line: lineAt(text, match[0]), Confidence: Certain})
+	}
+	if strings.Contains(text, "Class.forName(") || strings.Contains(text, "Proxy.") || strings.Contains(text, "${") {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{Message: "反射、代理或动态路由未能静态确定", Line: 1, Confidence: Unresolved})
 	}
 	if relation := implementsPattern.FindStringSubmatch(masked[typeMatch[0]:]); relation != nil {
 		for _, target := range strings.Split(relation[1], ",") {
@@ -261,6 +291,9 @@ func extractMapper(content []byte) Result {
 		return Result{Diagnostics: []Diagnostic{{Message: "MyBatis XML 缺少 mapper namespace，未生成关系", Line: 1, Confidence: Unresolved}}}
 	}
 	result := Result{Symbols: []Symbol{{Name: namespace, Kind: "mapper", Line: 1}}}
+	if strings.Contains(text, "${") || strings.Contains(strings.ToLower(text), "<if") {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{Message: "动态 SQL 可能导致表和条件关系不完整", Line: 1, Confidence: Unresolved})
+	}
 	for _, statement := range statementPattern.FindAllStringSubmatchIndex(text, -1) {
 		statementType := text[statement[2]:statement[3]]
 		id := text[statement[4]:statement[5]]
