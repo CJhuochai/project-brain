@@ -9,6 +9,7 @@ import (
 var (
 	packagePattern   = regexp.MustCompile(`^\s*package\s+([\w.]+)\s*;`)
 	typePattern      = regexp.MustCompile(`\b(class|interface|enum)\s+(\w+)`)
+	fieldPattern     = regexp.MustCompile(`\b(?:private|protected)\s+(?:final\s+)?([A-Z]\w*)\s+\w+`)
 	routePattern     = regexp.MustCompile(`@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*"([^"]+)"`)
 	namespacePattern = regexp.MustCompile(`(?i)<mapper\s+[^>]*namespace\s*=\s*"([^"]+)"`)
 	statementPattern = regexp.MustCompile(`(?i)<(select|insert|update|delete)\s+[^>]*id\s*=\s*"([^"]+)"`)
@@ -28,13 +29,19 @@ func File(path string, content []byte) Result {
 func extractJava(content []byte) Result {
 	lines := strings.Split(string(content), "\n")
 	packageName, currentType, currentKind := "", "", "class"
-	controller := false
+	componentKind := ""
 	for index, line := range lines {
 		if match := packagePattern.FindStringSubmatch(line); match != nil {
 			packageName = match[1]
 		}
 		if strings.Contains(line, "@RestController") || strings.Contains(line, "@Controller") {
-			controller = true
+			componentKind = "controller"
+		}
+		if strings.Contains(line, "@Service") {
+			componentKind = "service"
+		}
+		if strings.Contains(line, "@Repository") {
+			componentKind = "repository"
 		}
 		if match := typePattern.FindStringSubmatch(line); match != nil {
 			currentType, currentKind = match[2], match[1]
@@ -42,13 +49,18 @@ func extractJava(content []byte) Result {
 			if packageName != "" {
 				name = packageName + "." + currentType
 			}
-			if controller {
-				currentKind = "controller"
+			if componentKind != "" {
+				currentKind = componentKind
 			}
 			result := Result{Symbols: []Symbol{{Name: name, Kind: currentKind, Line: index + 1}}}
 			for routeIndex, routeLine := range lines {
-				if route := routePattern.FindStringSubmatch(routeLine); route != nil && controller {
+				if route := routePattern.FindStringSubmatch(routeLine); route != nil && componentKind == "controller" {
 					result.Edges = append(result.Edges, Edge{Source: name, Target: route[2], Kind: "route", Line: routeIndex + 1, Confidence: Certain})
+				}
+			}
+			for fieldIndex, fieldLine := range lines {
+				if field := fieldPattern.FindStringSubmatch(fieldLine); field != nil {
+					result.Edges = append(result.Edges, Edge{Source: name, Target: field[1], Kind: "uses", Line: fieldIndex + 1, Confidence: Probable})
 				}
 			}
 			return result
