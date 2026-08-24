@@ -14,6 +14,9 @@ var (
 	implementsPattern = regexp.MustCompile(`\b(?:extends|implements)\s+([\w.,\s]+)`)
 	feignPattern      = regexp.MustCompile(`@FeignClient\s*\(\s*(?:name|value)\s*=\s*"([^"]+)"`)
 	routePattern      = regexp.MustCompile(`@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*"([^"]+)"`)
+	javaFieldPattern  = regexp.MustCompile(`(?m)^\s*(?:private|protected|public)?\s*(?:static\s+)?(?:final\s+)?([A-Z]\w*(?:\s*<[^;=(){}]+>)?)\s+(\w+)\s*(?:=[^;]*)?;`)
+	javaMethodPattern = regexp.MustCompile(`(?m)(?:^\s*@[\w.]+(?:\s*\([^)]*\))?\s*)*(?:^\s*(?:public|protected|private)\s+)?(?:static\s+)?[\w.<>\[\], ?]+\s+(\w+)\s*\([^;{}]*\)\s*(?:throws\s+[\w., ]+)?\{`)
+	javaCallPattern   = regexp.MustCompile(`\b(\w+)\s*\.\s*(\w+)\s*\(`)
 	namespacePattern  = regexp.MustCompile(`(?i)<mapper\s+[^>]*namespace\s*=\s*"([^"]+)"`)
 	statementPattern  = regexp.MustCompile(`(?i)<(select|insert|update|delete)\s+[^>]*id\s*=\s*"([^"]+)"`)
 	tablePattern      = regexp.MustCompile(`(?i)\b(from|join|update|into)\s+[` + "`" + `"]?([a-zA-Z0-9_]+)`)
@@ -49,67 +52,204 @@ func extractMaven(content []byte) Result {
 }
 
 func extractJava(content []byte) Result {
-	lines := strings.Split(string(content), "\n")
-	packageName, currentType, currentKind := "", "", "class"
-	componentKind := ""
+	text, masked := string(content), maskJava(string(content))
+	typeMatch := typePattern.FindStringSubmatchIndex(masked)
+	if typeMatch == nil {
+		return Result{}
+	}
+	typeName := masked[typeMatch[4]:typeMatch[5]]
+	lines := strings.Split(text, "\n")
+	imports, packageName := javaImportsAndPackage(lines)
+	qualifiedType := qualify(packageName, typeName)
+	componentKind := javaComponentKind(masked[:typeMatch[0]], typeName)
+	result := Result{Symbols: []Symbol{{Name: qualifiedType, Kind: componentKind, Line: lineAt(text, typeMatch[0])}}}
 	for index, line := range lines {
+		if imported := importPattern.FindStringSubmatch(line); imported != nil {
+			result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: imported[1], Kind: "imports", Line: index + 1, Confidence: Certain})
+		}
+		if feign := feignPattern.FindStringSubmatch(line); feign != nil {
+			result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: "feign:" + feign[1], Kind: "feign_client", Line: index + 1, Confidence: Certain})
+		}
+	}
+	if relation := implementsPattern.FindStringSubmatch(masked[typeMatch[0]:]); relation != nil {
+		for _, target := range strings.Split(relation[1], ",") {
+			if target = strings.TrimSpace(target); target != "" {
+				result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: target, Kind: "implements", Line: lineAt(text, typeMatch[0]), Confidence: Probable})
+			}
+		}
+	}
+	bodyStart := strings.Index(masked[typeMatch[1]:], "{") + typeMatch[1]
+	if bodyStart < typeMatch[1] {
+		return result
+	}
+	fields := javaFields(masked[bodyStart+1:], imports, packageName, lineAt(text, bodyStart+1))
+	for _, dependency := range fields {
+		result.Edges = append(result.Edges, Edge{Source: qualifiedType, Target: shortType(dependency.typeName), Kind: "uses", Line: dependency.line, Confidence: Probable})
+	}
+	for _, method := range javaMethodPattern.FindAllStringSubmatchIndex(masked[bodyStart+1:], -1) {
+		start := bodyStart + 1 + method[0]
+		if braceDepth(masked, bodyStart, start) != 1 {
+			continue
+		}
+		name := masked[bodyStart+1+method[2] : bodyStart+1+method[3]]
+		qualifiedMethod := qualifiedType + "." + name
+		line := lineAt(text, start)
+		result.Symbols = append(result.Symbols, Symbol{Name: qualifiedMethod, Kind: componentKind + "_method", Line: line})
+		header := text[start : bodyStart+1+method[1]]
+		if componentKind == "controller" {
+			for _, route := range routePattern.FindAllStringSubmatch(header, -1) {
+				result.Edges = append(result.Edges, Edge{Source: qualifiedMethod, Target: route[2], Kind: "route", Line: line, Confidence: Certain})
+			}
+		}
+		end := matchingBrace(masked, bodyStart+1+method[1]-1)
+		if end < 0 {
+			continue
+		}
+		for _, call := range javaCallPattern.FindAllStringSubmatchIndex(masked[bodyStart+1+method[1]:end], -1) {
+			fieldName := masked[bodyStart+1+method[1]+call[2] : bodyStart+1+method[1]+call[3]]
+			if dependency, found := fields[fieldName]; found {
+				callStart := bodyStart + 1 + method[1] + call[0]
+				calledMethod := masked[bodyStart+1+method[1]+call[4] : bodyStart+1+method[1]+call[5]]
+				result.Edges = append(result.Edges, Edge{Source: qualifiedMethod, Target: dependency.typeName + "." + calledMethod, Kind: "calls", Line: lineAt(text, callStart), Confidence: Certain})
+			}
+		}
+	}
+	return result
+}
+
+type javaField struct {
+	typeName string
+	line     int
+}
+
+func javaImportsAndPackage(lines []string) (map[string]string, string) {
+	imports, packageName := map[string]string{}, ""
+	for _, line := range lines {
 		if match := packagePattern.FindStringSubmatch(line); match != nil {
 			packageName = match[1]
 		}
-		if strings.Contains(line, "@RestController") || strings.Contains(line, "@Controller") {
-			componentKind = "controller"
-		}
-		if strings.Contains(line, "@Service") {
-			componentKind = "service"
-		}
-		if strings.Contains(line, "@Repository") {
-			componentKind = "repository"
-		}
-		if strings.Contains(line, "@Mapper") {
-			componentKind = "mapper"
-		}
-		if match := typePattern.FindStringSubmatch(line); match != nil {
-			currentType, currentKind = match[2], match[1]
-			name := currentType
-			if packageName != "" {
-				name = packageName + "." + currentType
-			}
-			if componentKind != "" {
-				currentKind = componentKind
-			}
-			result := Result{Symbols: []Symbol{{Name: name, Kind: currentKind, Line: index + 1}}}
-			for routeIndex, routeLine := range lines {
-				if route := routePattern.FindStringSubmatch(routeLine); route != nil && componentKind == "controller" {
-					result.Edges = append(result.Edges, Edge{Source: name, Target: route[2], Kind: "route", Line: routeIndex + 1, Confidence: Certain})
-				}
-			}
-			for fieldIndex, fieldLine := range lines {
-				if field := fieldPattern.FindStringSubmatch(fieldLine); field != nil {
-					result.Edges = append(result.Edges, Edge{Source: name, Target: field[1], Kind: "uses", Line: fieldIndex + 1, Confidence: Probable})
-				}
-			}
-			for importIndex, importLine := range lines {
-				if imported := importPattern.FindStringSubmatch(importLine); imported != nil {
-					result.Edges = append(result.Edges, Edge{Source: name, Target: imported[1], Kind: "imports", Line: importIndex + 1, Confidence: Certain})
-				}
-			}
-			if relation := implementsPattern.FindStringSubmatch(line); relation != nil {
-				for _, target := range strings.Split(relation[1], ",") {
-					if target = strings.TrimSpace(target); target != "" {
-						result.Edges = append(result.Edges, Edge{Source: name, Target: target, Kind: "implements", Line: index + 1, Confidence: Probable})
-					}
-				}
-			}
-			for feignIndex, feignLine := range lines {
-				if feign := feignPattern.FindStringSubmatch(feignLine); feign != nil {
-					result.Edges = append(result.Edges, Edge{Source: name, Target: "feign:" + feign[1], Kind: "feign_client", Line: feignIndex + 1, Confidence: Certain})
-				}
-			}
-			return result
+		if match := importPattern.FindStringSubmatch(line); match != nil {
+			imports[shortType(match[1])] = match[1]
 		}
 	}
-	return Result{}
+	return imports, packageName
 }
+
+func javaComponentKind(text, typeName string) string {
+	if strings.Contains(text, "@RestController") || strings.Contains(text, "@Controller") {
+		return "controller"
+	}
+	if strings.Contains(text, "@Mapper") {
+		return "mapper"
+	}
+	if strings.Contains(text, "@Repository") {
+		return "repository"
+	}
+	if strings.Contains(text, "@Service") && strings.HasSuffix(typeName, "Application") {
+		return "application"
+	}
+	if strings.Contains(text, "@Service") {
+		return "service"
+	}
+	return "class"
+}
+
+func javaFields(text string, imports map[string]string, packageName string, baseLine int) map[string]javaField {
+	fields := map[string]javaField{}
+	for _, field := range javaFieldPattern.FindAllStringSubmatchIndex(text, -1) {
+		if braceDepth(text, 0, field[0]) != 0 {
+			continue
+		}
+		name := text[field[4]:field[5]]
+		fields[name] = javaField{typeName: qualifyJavaType(text[field[2]:field[3]], imports, packageName), line: baseLine + strings.Count(text[:field[0]], "\n")}
+	}
+	return fields
+}
+
+func qualifyJavaType(name string, imports map[string]string, packageName string) string {
+	name = strings.TrimSpace(strings.Split(name, "<")[0])
+	if qualified, found := imports[name]; found {
+		return qualified
+	}
+	return qualify(packageName, name)
+}
+
+func qualify(packageName, name string) string {
+	if packageName == "" || strings.Contains(name, ".") {
+		return name
+	}
+	return packageName + "." + name
+}
+
+func shortType(name string) string {
+	if index := strings.LastIndex(name, "."); index >= 0 {
+		return name[index+1:]
+	}
+	return name
+}
+
+func maskJava(text string) string {
+	masked := []byte(text)
+	for index := 0; index < len(masked); index++ {
+		if masked[index] == '/' && index+1 < len(masked) && masked[index+1] == '/' {
+			for index < len(masked) && masked[index] != '\n' {
+				masked[index], index = ' ', index+1
+			}
+			index--
+		} else if masked[index] == '/' && index+1 < len(masked) && masked[index+1] == '*' {
+			for index < len(masked)-1 && !(masked[index] == '*' && masked[index+1] == '/') {
+				if masked[index] != '\n' {
+					masked[index] = ' '
+				}
+				index++
+			}
+			if index+1 < len(masked) {
+				masked[index], masked[index+1] = ' ', ' '
+				index++
+			}
+		} else if masked[index] == '"' || masked[index] == '\'' {
+			quote := masked[index]
+			masked[index] = ' '
+			index++
+			for index < len(masked) && masked[index] != quote {
+				if masked[index] == '\\' && index+1 < len(masked) {
+					masked[index], masked[index+1], index = ' ', ' ', index+2
+					continue
+				}
+				if masked[index] != '\n' {
+					masked[index] = ' '
+				}
+				index++
+			}
+			if index < len(masked) {
+				masked[index] = ' '
+			}
+		}
+	}
+	return string(masked)
+}
+
+func braceDepth(text string, start, end int) int {
+	return strings.Count(text[start:end], "{") - strings.Count(text[start:end], "}")
+}
+
+func matchingBrace(text string, start int) int {
+	depth := 0
+	for index := start; index < len(text); index++ {
+		if text[index] == '{' {
+			depth++
+		}
+		if text[index] == '}' {
+			depth--
+			if depth == 0 {
+				return index
+			}
+		}
+	}
+	return -1
+}
+
+func lineAt(text string, index int) int { return strings.Count(text[:index], "\n") + 1 }
 
 func extractMapper(content []byte) Result {
 	text := string(content)
@@ -122,15 +262,21 @@ func extractMapper(content []byte) Result {
 	}
 	result := Result{Symbols: []Symbol{{Name: namespace, Kind: "mapper", Line: 1}}}
 	for _, statement := range statementPattern.FindAllStringSubmatchIndex(text, -1) {
+		statementType := text[statement[2]:statement[3]]
 		id := text[statement[4]:statement[5]]
 		line := strings.Count(text[:statement[0]], "\n") + 1
 		name := namespace + "." + id
 		result.Symbols = append(result.Symbols, Symbol{Name: name, Kind: "mapper_statement", Line: line})
 		result.Edges = append(result.Edges, Edge{Source: namespace, Target: name, Kind: "maps_statement", Line: line, Confidence: Certain})
-	}
-	for _, table := range tablePattern.FindAllStringSubmatchIndex(text, -1) {
-		line := strings.Count(text[:table[0]], "\n") + 1
-		result.Edges = append(result.Edges, Edge{Source: namespace, Target: text[table[4]:table[5]], Kind: "queries_table", Line: line, Confidence: Certain})
+		close := regexp.MustCompile(`(?is)</` + statementType + `\s*>`).FindStringIndex(text[statement[1]:])
+		if close == nil {
+			continue
+		}
+		bodyStart, bodyEnd := statement[1], statement[1]+close[0]
+		for _, table := range tablePattern.FindAllStringSubmatchIndex(text[bodyStart:bodyEnd], -1) {
+			tableStart := bodyStart + table[0]
+			result.Edges = append(result.Edges, Edge{Source: name, Target: text[bodyStart+table[4] : bodyStart+table[5]], Kind: "queries_table", Line: strings.Count(text[:tableStart], "\n") + 1, Confidence: Certain})
+		}
 	}
 	return result
 }
