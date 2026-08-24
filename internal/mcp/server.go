@@ -7,10 +7,10 @@ import (
 	"io"
 	"strings"
 
+	"github.com/CJhuochai/project-brain/internal/indexer"
 	"github.com/CJhuochai/project-brain/internal/query"
 	"github.com/CJhuochai/project-brain/internal/requirement"
 	"github.com/CJhuochai/project-brain/internal/storage"
-	"github.com/CJhuochai/project-brain/internal/workspace"
 )
 
 type request struct {
@@ -82,13 +82,6 @@ func tools() []map[string]any {
 }
 
 func call(root, name string, arguments map[string]any) (any, error) {
-	if name == "workspace_status" {
-		repositories, err := workspace.Discover(root)
-		if err != nil {
-			return nil, err
-		}
-		return repositories, nil
-	}
 	workspaceDir, err := storage.WorkspaceDir(root)
 	if err != nil {
 		return nil, err
@@ -98,6 +91,13 @@ func call(root, name string, arguments map[string]any) (any, error) {
 		return nil, err
 	}
 	defer db.Close()
+	refresh, err := indexer.Refresh(root, db)
+	if err != nil {
+		return nil, err
+	}
+	if name == "workspace_status" {
+		return refresh, nil
+	}
 	text, _ := arguments["text"].(string)
 	switch name {
 	case "find_business_context", "get_evidence":

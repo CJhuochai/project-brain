@@ -5,6 +5,7 @@ import "database/sql"
 type RepositoryRecord struct {
 	FileCount       int    `json:"file_count"`
 	DiagnosticCount int    `json:"diagnostic_count"`
+	BaselineCommit  string `json:"baseline_commit,omitempty"`
 	IndexedAt       string `json:"indexed_at,omitempty"`
 }
 
@@ -17,7 +18,7 @@ ON CONFLICT(repository_id) DO UPDATE SET baseline_branch=excluded.baseline_branc
 
 func (db *DB) RepositoryRecord(repositoryID string) (RepositoryRecord, error) {
 	var record RepositoryRecord
-	err := db.QueryRow(`SELECT (SELECT count(*) FROM files WHERE repository_id = ?), (SELECT count(*) FROM diagnostics WHERE repository_id = ?), indexed_at FROM repositories WHERE repository_id = ?`, repositoryID, repositoryID, repositoryID).Scan(&record.FileCount, &record.DiagnosticCount, &record.IndexedAt)
+	err := db.QueryRow(`SELECT (SELECT count(*) FROM files WHERE repository_id = ?), (SELECT count(*) FROM diagnostics WHERE repository_id = ?), baseline_commit, indexed_at FROM repositories WHERE repository_id = ?`, repositoryID, repositoryID, repositoryID).Scan(&record.FileCount, &record.DiagnosticCount, &record.BaselineCommit, &record.IndexedAt)
 	if err == sql.ErrNoRows {
 		return RepositoryRecord{}, nil
 	}

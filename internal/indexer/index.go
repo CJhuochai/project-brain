@@ -20,6 +20,47 @@ type Result struct {
 	ChangedFiles int `json:"changed_files"`
 }
 
+type RefreshResult struct {
+	IndexState   string                 `json:"index_state"`
+	Repositories []workspace.Repository `json:"repositories"`
+	Result
+}
+
+func Refresh(root string, db *storage.DB) (RefreshResult, error) {
+	repositories, err := workspace.Discover(root)
+	if err != nil {
+		return RefreshResult{}, err
+	}
+	result := RefreshResult{IndexState: "baseline_unknown", Repositories: repositories}
+	known := false
+	for _, repository := range repositories {
+		if repository.BaselineState != workspace.BaselineKnown {
+			continue
+		}
+		known = true
+		record, err := db.RepositoryRecord(repository.Path)
+		if err != nil {
+			return RefreshResult{}, err
+		}
+		if record.BaselineCommit == repository.BaselineCommit {
+			continue
+		}
+		indexed, changed, err := indexRepository(repository, db)
+		if err != nil {
+			return RefreshResult{}, err
+		}
+		result.Repositories = repositories
+		result.Result.Repositories++
+		result.IndexedFiles += indexed
+		result.ChangedFiles += changed
+		result.IndexState = "refreshed"
+	}
+	if known && result.IndexState != "refreshed" {
+		result.IndexState = "up_to_date"
+	}
+	return result, nil
+}
+
 func Index(root string, db *storage.DB) (Result, error) {
 	repositories, err := workspace.Discover(root)
 	if err != nil {

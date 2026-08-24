@@ -3,6 +3,9 @@ package mcp
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -17,6 +20,74 @@ func TestServeListsToolsAndRejectsUnknownTool(t *testing.T) {
 	if !strings.Contains(text, "find_business_context") || !strings.Contains(text, "unknown tool") {
 		t.Fatalf("output=%s", text)
 	}
+}
+
+func TestWorkspaceStatusRefreshesChangedBaseline(t *testing.T) {
+	root := createBaselineRepository(t)
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	text := workspaceStatus(t, root)
+	if !strings.Contains(text, `"index_state":"refreshed"`) {
+		t.Fatalf("status=%s", text)
+	}
+}
+
+func TestWorkspaceStatusSkipsUnchangedBaseline(t *testing.T) {
+	root := createBaselineRepository(t)
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	workspaceStatus(t, root)
+	text := workspaceStatus(t, root)
+	if !strings.Contains(text, `"index_state":"up_to_date"`) {
+		t.Fatalf("status=%s", text)
+	}
+}
+
+func workspaceStatus(t *testing.T, root string) string {
+	t.Helper()
+	var output bytes.Buffer
+	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"workspace_status","arguments":{}}}` + "\n")
+	if err := Serve(input, &output, root); err != nil {
+		t.Fatal(err)
+	}
+	var response struct {
+		Result struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	return response.Result.Content[0].Text
+}
+
+func createBaselineRepository(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	repo := filepath.Join(root, "service")
+	runGit(t, root, "init", "-b", "main", repo)
+	runGit(t, repo, "config", "user.email", "test@example.com")
+	runGit(t, repo, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(repo, "Main.java"), []byte("class Main {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "initial")
+	commit := runGit(t, repo, "rev-parse", "HEAD")
+	runGit(t, repo, "remote", "add", "origin", "https://example.invalid/service.git")
+	runGit(t, repo, "update-ref", "refs/remotes/origin/main", commit)
+	runGit(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	return root
+}
+
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	command := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, output)
+	}
+	return strings.TrimSpace(string(output))
 }
 
 func TestServeIgnoresInitializedNotificationAndPublishesInputSchemas(t *testing.T) {
