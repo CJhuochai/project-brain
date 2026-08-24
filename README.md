@@ -2,8 +2,10 @@
 
 [English](README.en.md) | 简体中文
 
+![Project Brain Logo](codex-plugin/project-brain-codex/assets/chenpi-brain.png)
+
 ![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)
-![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2EA44F)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **本地优先、只读的多仓库代码知识库。** 给它一个微服务工作区，Project Brain 会扫描各仓库的远程默认分支索引，帮助开发 Agent 定位需求涉及的项目、代码入口、调用链、变更影响与待确认风险。
@@ -18,15 +20,24 @@
 - 对文件、提交或 `base..target` 比较范围分析改动影响；基线变化时自动增量刷新。
 - 通过标准 MCP 接入 Codex；可选插件会在收到需求或变更请求时优先调用知识库。
 
-## 快速开始
+## 安装与使用
 
-下载 [v1.0.0](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0) 的 Windows 单文件，或本地构建（需要 Go 1.25+）：
+从 [v1.0.0](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0) 下载与你平台匹配的文件；下载校验文件后，可用 `sha256sum -c <文件名>.sha256`（macOS/Linux）或 `Get-FileHash <文件名>`（Windows）校验。
+
+| 平台 | 发布文件 | 运行方式 |
+| --- | --- | --- |
+| Windows x64 | `project-brain-1.0.0-windows-amd64.exe` | `./project-brain-1.0.0-windows-amd64.exe status <工作区>` |
+| Linux x64 | `project-brain-1.0.0-linux-amd64` | `chmod +x project-brain-1.0.0-linux-amd64` 后执行 `./project-brain-1.0.0-linux-amd64 status <工作区>` |
+| macOS Intel | `project-brain-1.0.0-darwin-amd64` | `chmod +x project-brain-1.0.0-darwin-amd64` 后执行 |
+| macOS Apple Silicon | `project-brain-1.0.0-darwin-arm64` | `chmod +x project-brain-1.0.0-darwin-arm64` 后执行 |
+
+也可本地构建（需要 Go 1.25+）：
 
 ```powershell
 go build -o bin\project-brain.exe ./cmd/project-brain
 ```
 
-对一个微服务工作区执行：
+以 Windows 为例，对一个微服务工作区执行：
 
 ```powershell
 bin\project-brain.exe discover E:\BasisProject
@@ -47,7 +58,15 @@ bin\project-brain.exe mcp E:\BasisProject
 
 支持 `workspace_status`、`find_business_context`、`trace_code_path`、`analyze_change_impact`、`analyze_change`、`analyze_requirement` 与 `get_evidence`。
 
-复制 [examples/codex-config.toml](examples/codex-config.toml) 的配置，按本机二进制与工作区路径修改后添加到 Codex 配置并重启客户端。可选的 Codex 适配插件位于 `codex-plugin/project-brain-codex`；它只规定需求/原型/二次开发请求优先走 `analyze_requirement`，不含业务源码或索引。
+复制 [examples/codex-config.toml](examples/codex-config.toml) 的配置，按本机二进制与工作区路径修改后添加到 Codex 配置并重启客户端。Windows 的 `command` 指向 `.exe`；macOS/Linux 指向已 `chmod +x` 的对应二进制，例如：
+
+```toml
+[mcp_servers.project_brain]
+command = "/absolute/path/project-brain-1.0.0-darwin-arm64"
+args = ["mcp", "/absolute/path/to/workspace"]
+```
+
+可选的 Codex 适配插件位于 `codex-plugin/project-brain-codex`；它只规定需求/原型/二次开发请求优先走 `analyze_requirement`，不含业务源码或索引。
 
 `analyze_change` 接收默认基线文件路径、单个本地 commit 或 `base..target`；单个 commit 会精确定位所在仓库，`HEAD~1..HEAD` 等相对范围则在每个仓库内分别解释。
 
@@ -60,7 +79,7 @@ bin\project-brain.exe mcp E:\BasisProject
 ## 验收与发布
 
 - [1.0 本地验收记录](docs/acceptance/project-brain-1.0.md)：30 个仓库发现、29 个完成索引、11,172 个文件；已用真实需求和 Git 提交验证。
-- [v1.0.0 发布页](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0)：提供 Windows x64 可执行文件及 SHA-256 校验文件。
+- [v1.0.0 发布页](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0)：提供 Windows x64、Linux x64、macOS Intel、macOS Apple Silicon 可执行文件及 SHA-256 校验文件。
 
 ## 许可证
 

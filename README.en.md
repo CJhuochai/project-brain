@@ -2,8 +2,10 @@
 
 English | [简体中文](README.md)
 
+![Project Brain Logo](codex-plugin/project-brain-codex/assets/chenpi-brain.png)
+
 ![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)
-![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2EA44F)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **A local-first, read-only code knowledge base for multi-repository projects.** Point Project Brain at a microservice workspace to locate the affected repositories, entry points, call paths, change impact, and risks behind a requirement.
@@ -18,9 +20,18 @@ English | [简体中文](README.md)
 - Analyzes a file, commit, or `base..target` range and refreshes only repositories whose baseline changed.
 - Exposes standard MCP tools for Codex; the optional Codex plugin prioritizes the knowledge base for requirement and change requests.
 
-## Quick start
+## Install and use
 
-Download the Windows binary from [v1.0.0](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0), or build locally with Go 1.25+:
+Download the matching binary from [v1.0.0](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0). Verify it with `sha256sum -c <file>.sha256` on macOS/Linux, or `Get-FileHash <file>` on Windows.
+
+| Platform | Release file | Run |
+| --- | --- | --- |
+| Windows x64 | `project-brain-1.0.0-windows-amd64.exe` | `./project-brain-1.0.0-windows-amd64.exe status <workspace>` |
+| Linux x64 | `project-brain-1.0.0-linux-amd64` | Run `chmod +x project-brain-1.0.0-linux-amd64`, then `./project-brain-1.0.0-linux-amd64 status <workspace>` |
+| macOS Intel | `project-brain-1.0.0-darwin-amd64` | Run `chmod +x project-brain-1.0.0-darwin-amd64`, then execute it |
+| macOS Apple Silicon | `project-brain-1.0.0-darwin-arm64` | Run `chmod +x project-brain-1.0.0-darwin-arm64`, then execute it |
+
+Or build locally with Go 1.25+:
 
 ```powershell
 go build -o bin\project-brain.exe ./cmd/project-brain
@@ -45,7 +56,15 @@ bin\project-brain.exe mcp E:\BasisProject
 
 Supported tools: `workspace_status`, `find_business_context`, `trace_code_path`, `analyze_change_impact`, `analyze_change`, `analyze_requirement`, and `get_evidence`.
 
-Copy [examples/codex-config.toml](examples/codex-config.toml), update the local binary and workspace paths, then add it to Codex and restart the MCP client. The optional adapter at `codex-plugin/project-brain-codex` only tells Codex to use `analyze_requirement` first; it contains neither business source nor indexes.
+Copy [examples/codex-config.toml](examples/codex-config.toml), update the local binary and workspace paths, then add it to Codex and restart the MCP client. On Windows `command` targets the `.exe`; on macOS/Linux it targets the matching executable after `chmod +x`:
+
+```toml
+[mcp_servers.project_brain]
+command = "/absolute/path/project-brain-1.0.0-darwin-arm64"
+args = ["mcp", "/absolute/path/to/workspace"]
+```
+
+The optional adapter at `codex-plugin/project-brain-codex` only tells Codex to use `analyze_requirement` first; it contains neither business source nor indexes.
 
 ## Privacy and limits
 
@@ -56,7 +75,7 @@ Copy [examples/codex-config.toml](examples/codex-config.toml), update the local 
 ## Verification and release
 
 - [1.0 local acceptance record](docs/acceptance/project-brain-1.0.md): 30 repositories discovered, 29 indexed, and 11,172 files indexed; validated against real requirement documents and a Git commit.
-- [v1.0.0 release](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0): Windows x64 executable and SHA-256 checksum.
+- [v1.0.0 release](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0): Windows x64, Linux x64, macOS Intel, and macOS Apple Silicon executables with SHA-256 checksums.
 
 ## License
 
