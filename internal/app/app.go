@@ -6,13 +6,16 @@ import (
 	"io"
 
 	"github.com/CJhuochai/project-brain/internal/indexer"
+	"github.com/CJhuochai/project-brain/internal/input"
 	"github.com/CJhuochai/project-brain/internal/query"
+	"github.com/CJhuochai/project-brain/internal/report"
 	"github.com/CJhuochai/project-brain/internal/storage"
 	"github.com/CJhuochai/project-brain/internal/workspace"
+	"github.com/google/uuid"
 )
 
 func Run(args []string, output io.Writer) error {
-	if len(args) < 2 || len(args) > 3 {
+	if len(args) < 2 {
 		return usage()
 	}
 	switch args[0] {
@@ -91,6 +94,55 @@ func Run(args []string, output io.Writer) error {
 			return err
 		}
 		return json.NewEncoder(output).Encode(result)
+	case "analyze":
+		if len(args) < 3 {
+			return usage()
+		}
+		db, err := openDB(args[1])
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		if _, err := indexer.Refresh(args[1], db); err != nil {
+			return err
+		}
+		source, err := input.Parse("", args[2:], "")
+		if err != nil {
+			return err
+		}
+		result, err := report.AnalyzeRequirement(db, source)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(output).Encode(result)
+	case "report":
+		if len(args) != 3 {
+			return usage()
+		}
+		db, err := openDB(args[1])
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		result, err := db.Report(args[2])
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(output).Encode(result)
+	case "feedback":
+		if len(args) != 7 {
+			return usage()
+		}
+		db, err := openDB(args[1])
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		item := storage.Feedback{ID: uuid.NewString(), ReportID: args[2], SubjectKind: args[3], SubjectKey: args[4], Decision: args[5], Note: args[6]}
+		if err := db.RecordFeedback(item); err != nil {
+			return err
+		}
+		return json.NewEncoder(output).Encode(item)
 	default:
 		return usage()
 	}
@@ -112,5 +164,5 @@ func openDB(root string) (*storage.DB, error) {
 }
 
 func usage() error {
-	return fmt.Errorf("usage: project-brain <discover|index|refresh|status> <workspace>; project-brain <search|trace|impact> <workspace> <target>")
+	return fmt.Errorf("usage: project-brain <discover|index|refresh|status> <workspace>; project-brain <search|trace|impact|report> <workspace> <target>; project-brain analyze <workspace> <local-input...>; project-brain feedback <workspace> <report-id> <kind> <key> <decision> <note>")
 }
