@@ -33,7 +33,7 @@ func (db *DB) initialize() error {
 	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		return err
 	}
-	if version < 6 {
+	if version < 7 {
 		if _, err := db.Exec(`DROP TABLE IF EXISTS diagnostics; DROP TABLE IF EXISTS repositories; DROP TABLE IF EXISTS edges; DROP TABLE IF EXISTS symbols; DROP TABLE IF EXISTS file_fts; DROP TABLE IF EXISTS files;`); err != nil {
 			return err
 		}
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS edges (
 CREATE INDEX IF NOT EXISTS edges_target ON edges(target);
 CREATE INDEX IF NOT EXISTS edges_source ON edges(source);
 CREATE TABLE IF NOT EXISTS diagnostics (id INTEGER PRIMARY KEY, repository_id TEXT NOT NULL, path TEXT NOT NULL, message TEXT NOT NULL, line INTEGER NOT NULL, confidence TEXT NOT NULL);
-PRAGMA user_version = 6;
+PRAGMA user_version = 7;
 `)
 	return err
 }
