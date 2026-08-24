@@ -21,9 +21,18 @@ type Result struct {
 }
 
 type RefreshResult struct {
-	IndexState   string                 `json:"index_state"`
-	Repositories []workspace.Repository `json:"repositories"`
+	IndexState   string             `json:"index_state"`
+	Repositories []RepositoryStatus `json:"repositories"`
 	Result
+}
+
+type RepositoryStatus struct {
+	workspace.Repository
+	IndexState      string `json:"index_state"`
+	StaleReason     string `json:"stale_reason,omitempty"`
+	FileCount       int    `json:"file_count"`
+	DiagnosticCount int    `json:"diagnostic_count"`
+	IndexedAt       string `json:"indexed_at,omitempty"`
 }
 
 func Refresh(root string, db *storage.DB) (RefreshResult, error) {
@@ -31,10 +40,11 @@ func Refresh(root string, db *storage.DB) (RefreshResult, error) {
 	if err != nil {
 		return RefreshResult{}, err
 	}
-	result := RefreshResult{IndexState: "baseline_unknown", Repositories: repositories}
+	result := RefreshResult{IndexState: "baseline_unknown", Repositories: make([]RepositoryStatus, 0, len(repositories))}
 	known := false
 	for _, repository := range repositories {
 		if repository.BaselineState != workspace.BaselineKnown {
+			result.Repositories = append(result.Repositories, RepositoryStatus{Repository: repository, IndexState: "baseline_unknown", StaleReason: "未识别远程默认主分支"})
 			continue
 		}
 		known = true
@@ -42,18 +52,23 @@ func Refresh(root string, db *storage.DB) (RefreshResult, error) {
 		if err != nil {
 			return RefreshResult{}, err
 		}
-		if record.BaselineCommit == repository.BaselineCommit {
-			continue
+		state := "up_to_date"
+		if record.BaselineCommit != repository.BaselineCommit {
+			indexed, changed, err := indexRepository(repository, db)
+			if err != nil {
+				return RefreshResult{}, err
+			}
+			record, err = db.RepositoryRecord(repository.Path)
+			if err != nil {
+				return RefreshResult{}, err
+			}
+			result.Result.Repositories++
+			result.IndexedFiles += indexed
+			result.ChangedFiles += changed
+			result.IndexState = "refreshed"
+			state = "refreshed"
 		}
-		indexed, changed, err := indexRepository(repository, db)
-		if err != nil {
-			return RefreshResult{}, err
-		}
-		result.Repositories = repositories
-		result.Result.Repositories++
-		result.IndexedFiles += indexed
-		result.ChangedFiles += changed
-		result.IndexState = "refreshed"
+		result.Repositories = append(result.Repositories, RepositoryStatus{Repository: repository, IndexState: state, FileCount: record.FileCount, DiagnosticCount: record.DiagnosticCount, IndexedAt: record.IndexedAt})
 	}
 	if known && result.IndexState != "refreshed" {
 		result.IndexState = "up_to_date"
@@ -98,6 +113,7 @@ func indexRepository(repository workspace.Repository, db *storage.DB) (int, int,
 	}
 	reader := tar.NewReader(stdout)
 	indexed, changed := 0, 0
+	paths := map[string]bool{}
 	for {
 		header, nextErr := reader.Next()
 		if nextErr == io.EOF {
@@ -110,6 +126,7 @@ func indexRepository(repository workspace.Repository, db *storage.DB) (int, int,
 		if header.Typeflag != tar.TypeReg || !isSupported(header.Name) {
 			continue
 		}
+		paths[header.Name] = true
 		content, readErr := io.ReadAll(reader)
 		if readErr != nil {
 			_ = command.Wait()
@@ -134,6 +151,9 @@ func indexRepository(repository workspace.Repository, db *storage.DB) (int, int,
 		return 0, 0, err
 	}
 	if err := command.Wait(); err != nil {
+		return 0, 0, err
+	}
+	if err := db.DeleteFilesNotInTx(transaction, repository.Path, paths); err != nil {
 		return 0, 0, err
 	}
 	if err := transaction.Commit(); err != nil {

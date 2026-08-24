@@ -41,6 +41,31 @@ func TestWorkspaceStatusSkipsUnchangedBaseline(t *testing.T) {
 	}
 }
 
+func TestWorkspaceStatusReportsPerRepositoryFreshness(t *testing.T) {
+	root := createBaselineRepository(t)
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	text := workspaceStatus(t, root)
+	var status struct {
+		Repositories []struct {
+			BaselineCommit  string `json:"baseline_commit"`
+			DiagnosticCount int    `json:"diagnostic_count"`
+			FileCount       int    `json:"file_count"`
+			IndexedAt       string `json:"indexed_at"`
+			IndexState      string `json:"index_state"`
+		} `json:"repositories"`
+	}
+	if err := json.Unmarshal([]byte(text), &status); err != nil {
+		t.Fatal(err)
+	}
+	if len(status.Repositories) != 1 {
+		t.Fatalf("repositories=%#v", status.Repositories)
+	}
+	repository := status.Repositories[0]
+	if repository.IndexState != "refreshed" || repository.FileCount != 1 || repository.BaselineCommit == "" || repository.IndexedAt == "" || repository.DiagnosticCount != 0 {
+		t.Fatalf("repository status=%#v", repository)
+	}
+}
+
 func workspaceStatus(t *testing.T, root string) string {
 	t.Helper()
 	var output bytes.Buffer

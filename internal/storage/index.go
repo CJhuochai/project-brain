@@ -6,6 +6,51 @@ import (
 	"encoding/hex"
 )
 
+func (db *DB) DeleteFilesNotInTx(transaction *sql.Tx, repositoryID string, paths map[string]bool) error {
+	rows, err := transaction.Query(`SELECT id, path FROM files WHERE repository_id = ?`, repositoryID)
+	if err != nil {
+		return err
+	}
+	var stale []struct {
+		id   int64
+		path string
+	}
+	for rows.Next() {
+		var item struct {
+			id   int64
+			path string
+		}
+		if err := rows.Scan(&item.id, &item.path); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if !paths[item.path] {
+			stale = append(stale, item)
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, item := range stale {
+		if _, err := transaction.Exec(`DELETE FROM file_fts WHERE rowid = ?`, item.id); err != nil {
+			return err
+		}
+		if _, err := transaction.Exec(`DELETE FROM files WHERE id = ?`, item.id); err != nil {
+			return err
+		}
+		if _, err := transaction.Exec(`DELETE FROM symbols WHERE repository_id = ? AND path = ?`, repositoryID, item.path); err != nil {
+			return err
+		}
+		if _, err := transaction.Exec(`DELETE FROM edges WHERE repository_id = ? AND path = ?`, repositoryID, item.path); err != nil {
+			return err
+		}
+		if _, err := transaction.Exec(`DELETE FROM diagnostics WHERE repository_id = ? AND path = ?`, repositoryID, item.path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (db *DB) UpsertFile(repositoryID, path string, content []byte) (bool, error) {
 	transaction, err := db.Begin()
 	if err != nil {
