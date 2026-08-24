@@ -35,6 +35,8 @@ bin\project-brain.exe mcp E:\ExampleWorkspace
 
 支持 `workspace_status`、`find_business_context`、`trace_code_path`、`analyze_change_impact`、`analyze_requirement` 和 `get_evidence` 六个工具。Codex 的配置样例见 [examples/codex-config.toml](examples/codex-config.toml)，需要按本机路径修改；本工具不会修改你的 Codex 配置。
 
+可选的 Codex 适配插件位于 `codex-plugin/project-brain-codex`。它不包含索引或业务源码，只规定：收到需求文档、原型或二次开发请求时，优先调用 `analyze_requirement` 再给出代码方案。
+
 ## 隐私与边界
 
 - 索引库位于 `%LOCALAPPDATA%\ProjectBrain`（其他系统遵循 XDG 本地数据目录）。删除对应工作区哈希目录即可清除索引。
