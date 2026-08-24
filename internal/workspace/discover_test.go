@@ -28,7 +28,7 @@ func TestDiscoverFindsRepositoriesAndReadsOnlyLocalRemoteHead(t *testing.T) {
 	for _, repo := range repos {
 		byName[repo.Name] = repo
 	}
-	if got := byName["known"]; got.Path != known || got.BaselineBranch != "main" || got.BaselineState != BaselineKnown || got.BaselineCommit == "" {
+	if got := byName["known"]; got.Path != known || got.RemoteURL != "https://example.invalid/known.git" || got.BaselineBranch != "main" || got.BaselineState != BaselineKnown || got.BaselineCommit == "" {
 		t.Fatalf("known repository = %#v", got)
 	}
 	if got := byName["unknown"]; got.BaselineState != BaselineUnknown || got.BaselineBranch != "" {
@@ -48,7 +48,7 @@ func createRepository(t *testing.T, root, name string, withBaseline bool) string
 	runGit(t, path, "add", "README.md")
 	runGit(t, path, "commit", "-m", "initial")
 	if withBaseline {
-		runGit(t, path, "remote", "add", "origin", "https://example.invalid/"+name+".git")
+		runGit(t, path, "remote", "add", "origin", "https://user:password@example.invalid/"+name+".git")
 		commit := runGit(t, path, "rev-parse", "HEAD")
 		runGit(t, path, "update-ref", "refs/remotes/origin/main", commit)
 		runGit(t, path, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
