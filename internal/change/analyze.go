@@ -32,6 +32,13 @@ func Files(root, revision string) ([]File, error) {
 		if repository.BaselineState != workspace.BaselineKnown {
 			continue
 		}
+		if !strings.Contains(revision, "..") && strings.Contains(strings.ReplaceAll(revision, "\\", "/"), "/") {
+			path := strings.TrimPrefix(strings.ReplaceAll(revision, "\\", "/"), repository.Name+"/")
+			if err := exec.Command("git", "-C", repository.Path, "cat-file", "-e", repository.BaselineCommit+":"+path).Run(); err == nil {
+				files = append(files, File{Repository: repository.Name, RepositoryID: repository.Path, Path: path})
+			}
+			continue
+		}
 		args := []string{"-C", repository.Path, "show", "--format=", "--name-only", revision}
 		if strings.Contains(revision, "..") {
 			args = []string{"-C", repository.Path, "diff", "--name-only", revision}
