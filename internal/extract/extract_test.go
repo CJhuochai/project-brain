@@ -34,6 +34,22 @@ func TestFileExtractsMyBatisNamespaceStatementAndTable(t *testing.T) {
 	}
 }
 
+func TestFileExtractsServiceDependencyAsProbableEvidence(t *testing.T) {
+	content := []byte(`package com.example;
+import org.springframework.stereotype.Service;
+@Service
+class EntryService {
+  private final EntryMapper entryMapper = null;
+}`)
+	result := File("EntryService.java", content)
+	if !hasSymbol(result.Symbols, "com.example.EntryService", "service") {
+		t.Fatalf("service symbol missing: %#v", result.Symbols)
+	}
+	if !hasEdge(result.Edges, "uses", "EntryMapper", Probable) {
+		t.Fatalf("dependency edge missing: %#v", result.Edges)
+	}
+}
+
 func hasSymbol(symbols []Symbol, name, kind string) bool {
 	for _, symbol := range symbols {
 		if symbol.Name == name && symbol.Kind == kind {
