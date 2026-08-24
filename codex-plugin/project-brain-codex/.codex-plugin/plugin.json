@@ -1,0 +1,16 @@
+{
+  "name": "project-brain-codex",
+  "version": "0.1.0",
+  "description": "让 Codex 在需求分析前优先使用本地 Project Brain 知识库。",
+  "author": { "name": "CJhuochai" },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Project Brain Codex",
+    "shortDescription": "需求分析优先使用本地代码知识库。",
+    "longDescription": "在收到需求文档、交互原型或二次开发请求时，先调用本地 Project Brain MCP 分析项目、证据和影响范围。",
+    "developerName": "CJhuochai",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "分析这份需求涉及哪些项目、代码入口和影响点。"
+  }
+}
