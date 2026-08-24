@@ -8,7 +8,7 @@ import (
 	"github.com/CJhuochai/project-brain/internal/mcp"
 )
 
-const version = "dev"
+var version = "dev"
 
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
