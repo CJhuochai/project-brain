@@ -33,6 +33,17 @@ func Run(args []string, output io.Writer) error {
 			return err
 		}
 		return json.NewEncoder(output).Encode(result)
+	case "refresh":
+		db, err := openDB(args[1])
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		result, err := indexer.Refresh(args[1], db)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(output).Encode(result)
 	case "status":
 		db, err := openDB(args[1])
 		if err != nil {
@@ -101,5 +112,5 @@ func openDB(root string) (*storage.DB, error) {
 }
 
 func usage() error {
-	return fmt.Errorf("usage: project-brain <discover|index|status> <workspace>; project-brain <search|trace|impact> <workspace> <target>")
+	return fmt.Errorf("usage: project-brain <discover|index|refresh|status> <workspace>; project-brain <search|trace|impact> <workspace> <target>")
 }
