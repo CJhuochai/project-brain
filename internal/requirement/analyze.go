@@ -18,6 +18,8 @@ type Report struct {
 	Keywords     []string              `json:"keywords"`
 	Evidence     []query.Evidence      `json:"evidence"`
 	Repositories []RepositoryCandidate `json:"repositories"`
+	EntryPoints  []query.Evidence      `json:"entry_points"`
+	ChangePoints []query.Evidence      `json:"change_points"`
 }
 
 var tokenPattern = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_/-]*`)
@@ -39,6 +41,12 @@ func Analyze(db *storage.DB, text string) (Report, error) {
 		report.Evidence = append(report.Evidence, items...)
 		for _, item := range items {
 			counts[item.Repository]++
+			if item.Kind == "controller_method" || item.Kind == "route" || item.Kind == "mapper_statement" {
+				report.EntryPoints = append(report.EntryPoints, item)
+			}
+			if item.Kind != "text" {
+				report.ChangePoints = append(report.ChangePoints, item)
+			}
 		}
 	}
 	for repository, count := range counts {
