@@ -2,7 +2,7 @@
 
 English | [简体中文](README.md)
 
-![Project Brain Logo](codex-plugin/project-brain-codex/assets/chenpi-brain.png)
+<img src="codex-plugin/project-brain-codex/assets/chenpi-brain.png" width="160" alt="Project Brain Chenpi logo">
 
 ![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2EA44F)
@@ -11,6 +11,12 @@ English | [简体中文](README.md)
 **A local-first, read-only code knowledge base for multi-repository projects.** Point Project Brain at a microservice workspace to locate the affected repositories, entry points, call paths, change impact, and risks behind a requirement.
 
 > Indexes stay on your computer. Project Brain does not upload business source code or fetch, check out, or modify your business repositories.
+
+## Architecture
+
+![Project Brain architecture](assets/project-brain-architecture.svg)
+
+From the Agent/CLI entry point through the local coordinator, immutable index snapshots, and analysis reports, all data stays on the user's machine. Business repositories are scanned read-only; concurrent sessions read one complete snapshot until a refresh is atomically activated.
 
 ## What it does
 
