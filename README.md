@@ -2,7 +2,7 @@
 
 [English](README.en.md) | 简体中文
 
-![Project Brain Logo](codex-plugin/project-brain-codex/assets/chenpi-brain.png)
+<img src="codex-plugin/project-brain-codex/assets/chenpi-brain.png" width="160" alt="Project Brain 陈皮 Logo">
 
 ![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2EA44F)
@@ -11,6 +11,12 @@
 **本地优先、只读的多仓库代码知识库。** 给它一个微服务工作区，Project Brain 会扫描各仓库的远程默认分支索引，帮助开发 Agent 定位需求涉及的项目、代码入口、调用链、变更影响与待确认风险。
 
 > 所有索引保存在你的电脑；不上传业务源码，不 fetch、checkout 或修改业务仓库。
+
+## 整体架构
+
+![Project Brain 整体架构](assets/project-brain-architecture.svg)
+
+从 Agent/CLI 入口到本机协调者、不可变索引快照和分析报告，所有数据均停留在用户电脑；业务仓库仅被只读扫描。并发会话读取同一份完整快照，刷新完成后再原子切换。
 
 ## 它能做什么
 
