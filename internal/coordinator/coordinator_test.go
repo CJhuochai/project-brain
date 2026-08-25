@@ -114,6 +114,34 @@ func TestLatestRequestsCoalesceToOneRefreshedSnapshot(t *testing.T) {
 	}
 }
 
+func TestStableReturnsCompleteActiveSnapshotWhileRefreshRuns(t *testing.T) {
+	root := coordinatorRepository(t)
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	server, err := Start(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+	client, err := Connect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stable, err := client.Call(context.Background(), Request{Operation: "find_business_context", Arguments: map[string]any{"text": "Initial"}, Freshness: "stable"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stable.Meta.SnapshotID != "snapshot-001" || stable.Meta.Freshness != "refreshing" {
+		t.Fatalf("stable=%#v", stable)
+	}
+	latest, err := client.Call(context.Background(), Request{Operation: "find_business_context", Arguments: map[string]any{"text": "Initial"}, Freshness: "latest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.Meta.SnapshotID == "snapshot-001" || latest.Meta.Freshness != "up_to_date" {
+		t.Fatalf("latest=%#v", latest)
+	}
+}
+
 func coordinatorRepository(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
