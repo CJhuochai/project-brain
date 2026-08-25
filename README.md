@@ -82,6 +82,17 @@ args = ["mcp", "/absolute/path/to/workspace"]
 
 `analyze_change` 接收默认基线文件路径、单个本地 commit 或 `base..target`；单个 commit 会精确定位所在仓库，`HEAD~1..HEAD` 等相对范围则在每个仓库内分别解释。
 
+## 1.2 并发一致性
+
+从 1.2 起，同一工作区由一个本机协调者管理，多个 Codex 会话或 CLI 不会再同时写同一 SQLite 索引。索引以不可变 `snapshot-<id>.sqlite` 保存；`control.sqlite` 只保存协调状态、报告、反馈和规则版本。
+
+- 默认 `stable`：立即读最近完整快照；基线变化时响应会标记 `refreshing`。
+- `latest`：等待已合并的刷新任务完成；超时时仍返回完整旧快照。
+- 所有读工具可传 `freshness: "stable" | "latest"` 和固定 `snapshot_id`；响应带 `snapshot_id`、`rule_revision`、`freshness` 与 `active_baseline`。
+- 报告固定使用启动时的快照和规则修订号；历史报告不会被后续反馈改写。
+
+详见 [v1.2 架构说明](docs/architecture-v1.2.md)。若进程意外退出，下一次 `status` 或 MCP 调用会清理未完成 staging 快照，并继续使用最后完整快照。删除工作区数据目录会同时删除本地索引、报告和反馈。
+
 ## 隐私与边界
 
 - 索引库位于 `%LOCALAPPDATA%\ProjectBrain`（其他系统遵循 XDG 本地数据目录），删除对应工作区哈希目录即可清除。
