@@ -14,7 +14,7 @@
 
 ## 整体架构
 
-![Project Brain 整体架构](assets/project-brain-architecture.svg)
+![Project Brain 整体架构](assets/project-brain-architecture-zh.svg)
 
 从 Agent/CLI 入口到本机协调者、不可变索引快照和分析报告，所有数据均停留在用户电脑；业务仓库仅被只读扫描。并发会话读取同一份完整快照，刷新完成后再原子切换。
 
