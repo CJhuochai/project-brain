@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="title description">
+  <title id="title">Project Brain 整体架构</title><desc id="description">本地优先的多仓库代码知识库架构。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#09182a"/><stop offset="1" stop-color="#101a38"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2a78c5"/><stop offset="1" stop-color="#67bfff"/></linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6757d4"/><stop offset="1" stop-color="#af8dff"/></linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#188873"/><stop offset="1" stop-color="#62d8b7"/></linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#7f9ec0"/></marker>
+    <style>text{font-family:'Microsoft YaHei','PingFang SC',Arial,sans-serif}.k{fill:#96b4d7;font-size:13px;letter-spacing:2px}.h{fill:#f4f8ff;font-size:22px;font-weight:700}.t{fill:#c8d9ed;font-size:15px}.s{fill:#9bb4d2;font-size:13px}.box{stroke:#496b8c;stroke-width:1.4}.line{stroke:#7f9ec0;stroke-width:1.8;fill:none;marker-end:url(#arrow)}</style>
+  </defs>
+  <rect width="1200" height="560" rx="22" fill="url(#bg)"/><circle cx="1135" cy="35" r="135" fill="#438fd0" opacity=".1"/><circle cx="55" cy="540" r="130" fill="#805de5" opacity=".11"/>
+  <text x="56" y="62" class="k">本地优先 · 代码知识库</text><text x="56" y="104" class="h" font-size="31">多仓库代码知识库整体架构</text><text x="56" y="134" class="t">代码、索引、报告和反馈，全部保留在用户自己的电脑中</text>
+
+  <rect x="56" y="188" width="205" height="128" rx="16" fill="#112943" class="box"/><circle cx="89" cy="224" r="12" fill="#69bcf8" filter="url(#glow)"/><text x="114" y="230" class="h">使用入口</text><text x="82" y="267" class="t">智能体 / 命令行</text><text x="82" y="292" class="s">标准工具协议</text>
+  <rect x="322" y="171" width="250" height="162" rx="18" fill="url(#blue)"/><text x="351" y="214" class="k" fill="#e4f5ff">每个工作区唯一</text><text x="351" y="257" class="h">本地协调者</text><text x="351" y="288" class="t" fill="#eff9ff">统一刷新 · 统一读写</text><text x="351" y="312" class="s" fill="#eff9ff">回环通信 · 本地令牌</text>
+  <rect x="633" y="171" width="244" height="162" rx="18" fill="#112b46" class="box"/><text x="662" y="214" class="k">不可变证据</text><text x="662" y="257" class="h">代码知识快照</text><text x="662" y="288" class="t">文件 · 符号 · 关系</text><text x="662" y="312" class="s">检索始终读取完整版本</text>
+  <rect x="938" y="171" width="205" height="162" rx="18" fill="#123b39" class="box"/><text x="967" y="214" class="k" fill="#b3ebdc">本地控制库</text><text x="967" y="257" class="h">报告与反馈</text><text x="967" y="288" class="t">分析报告 · 规则版本</text><text x="967" y="312" class="s">历史结论可追溯</text>
+  <path d="M261 252H312M572 252H623M877 252H928" class="line"/>
+
+  <rect x="130" y="399" width="230" height="109" rx="16" fill="#182543" class="box"/><text x="160" y="439" class="k">只读边界</text><text x="160" y="473" class="h">业务代码仓库</text><text x="160" y="496" class="s">不拉取 · 不切换 · 不修改</text>
+  <rect x="477" y="399" width="246" height="109" rx="16" fill="url(#violet)"/><text x="507" y="439" class="k" fill="#f2eaff">增量刷新</text><text x="507" y="473" class="h">暂存快照</text><text x="507" y="496" class="s" fill="#f8f2ff">提取完成后原子切换</text>
+  <rect x="840" y="399" width="230" height="109" rx="16" fill="url(#green)"/><text x="870" y="439" class="k" fill="#ddfff4">可追溯输出</text><text x="870" y="473" class="h">需求与影响分析</text><text x="870" y="496" class="s" fill="#effff9">项目 · 证据 · 风险</text>
+  <path d="M360 453H467M723 453H830M602 333V370H245V389M602 370H955V389" class="line"/>
+  <text x="56" y="538" class="s">隐私边界：业务源码、索引、分析报告与人工反馈均不离开本机。</text>
+</svg>

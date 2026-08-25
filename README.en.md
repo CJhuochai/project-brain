@@ -14,7 +14,7 @@ English | [简体中文](README.md)
 
 ## Architecture
 
-![Project Brain architecture](assets/project-brain-architecture.svg)
+![Project Brain architecture](assets/project-brain-architecture-en.svg)
 
 From the Agent/CLI entry point through the local coordinator, immutable index snapshots, and analysis reports, all data stays on the user's machine. Business repositories are scanned read-only; concurrent sessions read one complete snapshot until a refresh is atomically activated.
 
