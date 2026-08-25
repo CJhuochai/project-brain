@@ -221,7 +221,11 @@ func (server *Server) chooseSnapshot(request Request) (storage.Snapshot, Metadat
 	if request.Freshness != "latest" {
 		return active, server.metadata(active, "refreshing", target), nil
 	}
-	<-done
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		return active, server.metadata(active, "stale", target), nil
+	}
 	server.refreshMu.Lock()
 	err = server.refreshError
 	server.refreshMu.Unlock()
