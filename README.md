@@ -22,14 +22,14 @@
 
 ## 安装与使用
 
-从 [v1.0.0](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0) 下载与你平台匹配的文件；下载校验文件后，可用 `sha256sum -c <文件名>.sha256`（macOS/Linux）或 `Get-FileHash <文件名>`（Windows）校验。
+从 [最新发布版本](https://github.com/CJhuochai/project-brain/releases/latest) 下载与你平台匹配的文件；下载校验文件后，可用 `sha256sum -c <文件名>.sha256`（macOS/Linux）或 `Get-FileHash <文件名>`（Windows）校验。
 
 | 平台 | 发布文件 | 运行方式 |
 | --- | --- | --- |
-| Windows x64 | `project-brain-1.0.0-windows-amd64.exe` | `./project-brain-1.0.0-windows-amd64.exe status <工作区>` |
-| Linux x64 | `project-brain-1.0.0-linux-amd64` | `chmod +x project-brain-1.0.0-linux-amd64` 后执行 `./project-brain-1.0.0-linux-amd64 status <工作区>` |
-| macOS Intel | `project-brain-1.0.0-darwin-amd64` | `chmod +x project-brain-1.0.0-darwin-amd64` 后执行 |
-| macOS Apple Silicon | `project-brain-1.0.0-darwin-arm64` | `chmod +x project-brain-1.0.0-darwin-arm64` 后执行 |
+| Windows x64 | `project-brain-<版本>-windows-amd64.exe` | `./project-brain-<版本>-windows-amd64.exe status <工作区>` |
+| Linux x64 | `project-brain-<版本>-linux-amd64` | `chmod +x project-brain-<版本>-linux-amd64` 后执行 |
+| macOS Intel | `project-brain-<版本>-darwin-amd64` | `chmod +x project-brain-<版本>-darwin-amd64` 后执行 |
+| macOS Apple Silicon | `project-brain-<版本>-darwin-arm64` | `chmod +x project-brain-<版本>-darwin-arm64` 后执行 |
 
 也可本地构建（需要 Go 1.25+）：
 
@@ -74,13 +74,24 @@ bin\project-brain.exe feedback E:\BasisProject <报告ID> repository entry-servi
 
 ```toml
 [mcp_servers.project_brain]
-command = "/absolute/path/project-brain-1.0.0-darwin-arm64"
+command = "/absolute/path/project-brain-<版本>-darwin-arm64"
 args = ["mcp", "/absolute/path/to/workspace"]
 ```
 
 可选的 Codex 适配插件位于 `codex-plugin/project-brain-codex`；它只规定需求/原型/二次开发请求优先走 `analyze_requirement`，不含业务源码或索引。
 
 `analyze_change` 接收默认基线文件路径、单个本地 commit 或 `base..target`；单个 commit 会精确定位所在仓库，`HEAD~1..HEAD` 等相对范围则在每个仓库内分别解释。
+
+## 1.2 并发一致性
+
+从 1.2 起，同一工作区由一个本机协调者管理，多个 Codex 会话或 CLI 不会再同时写同一 SQLite 索引。索引以不可变 `snapshot-<id>.sqlite` 保存；`control.sqlite` 只保存协调状态、报告、反馈和规则版本。
+
+- 默认 `stable`：立即读最近完整快照；基线变化时响应会标记 `refreshing`。
+- `latest`：等待已合并的刷新任务完成；超时时仍返回完整旧快照。
+- 所有读工具可传 `freshness: "stable" | "latest"` 和固定 `snapshot_id`；响应带 `snapshot_id`、`rule_revision`、`freshness` 与 `active_baseline`。
+- 报告固定使用启动时的快照和规则修订号；历史报告不会被后续反馈改写。
+
+详见 [v1.2 架构说明](docs/architecture-v1.2.md)。若进程意外退出，下一次 `status` 或 MCP 调用会清理未完成 staging 快照，并继续使用最后完整快照。删除工作区数据目录会同时删除本地索引、报告和反馈。
 
 ## 隐私与边界
 
@@ -92,6 +103,7 @@ args = ["mcp", "/absolute/path/to/workspace"]
 
 - [1.0 本地验收记录](docs/acceptance/project-brain-1.0.md)：30 个仓库发现、29 个完成索引、11,172 个文件；已用真实需求和 Git 提交验证。
 - [v1.0.0 发布页](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0)：提供 Windows x64、Linux x64、macOS Intel、macOS Apple Silicon 可执行文件及 SHA-256 校验文件。
+- [变更日志](CHANGELOG.md)：版本功能与修复记录；发布由推送 `vX.Y.Z` 标签自动完成构建、校验和 GitHub Release 创建。
 
 ## 许可证
 

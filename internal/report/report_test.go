@@ -1,6 +1,8 @@
 package report
 
 import (
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/CJhuochai/project-brain/internal/input"
@@ -32,5 +34,49 @@ func TestAnalysisReportPersistsAndAppliesRule(t *testing.T) {
 	}
 	if _, err := db.Report(second.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Break caught: persisting a report without its selected snapshot and rule
+// revision makes a later feedback write change the meaning of old analysis.
+func TestAnalysisReportPersistsChosenSnapshotAndRuleRevision(t *testing.T) {
+	directory := t.TempDir()
+	legacy, err := storage.Open(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := legacy.UpsertFile("student", "AdmitService.java", []byte("class AdmitService {}")); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.RecordIndex("student", "release", "abc", "baseline_known"); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
+	control, err := storage.OpenControl(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = control.Close() })
+	snapshot, err := control.ActiveSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, err := storage.OpenSnapshot(filepath.Clean(snapshot.Path), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = index.Close() })
+	result, err := AnalyzeRequirementAt(index, control, input.Result{Facts: []input.Fact{{Kind: "business_term", Value: "Admit"}}}, Provenance{SnapshotID: snapshot.ID, SnapshotCompleted: snapshot.Completed, Baselines: "student@abc", RuleRevision: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SnapshotID != snapshot.ID || result.RuleRevision != 0 {
+		t.Fatalf("report=%#v", result)
+	}
+	stored, err := control.Report(result.ID)
+	if err != nil || !strings.Contains(stored.JSON, `"snapshot_id":"`+snapshot.ID+`"`) {
+		t.Fatalf("stored=%#v err=%v", stored, err)
 	}
 }

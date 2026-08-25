@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Resolve version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - name: Test
+        run: go test ./... -count=1
+      - name: Vet
+        run: go vet ./...
+      - name: Build release assets
+        shell: pwsh
+        run: ./scripts/build-release.ps1 -Version $env:VERSION
+      - name: Verify release assets
+        shell: pwsh
+        run: ./scripts/test-release-layout.ps1 -Version $env:VERSION
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "Project Brain $GITHUB_REF_NAME" --notes-file "docs/releases/$GITHUB_REF_NAME.md"

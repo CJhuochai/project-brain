@@ -2,19 +2,14 @@ package mcp
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
-	"github.com/CJhuochai/project-brain/internal/change"
-	"github.com/CJhuochai/project-brain/internal/indexer"
-	"github.com/CJhuochai/project-brain/internal/input"
-	"github.com/CJhuochai/project-brain/internal/query"
-	"github.com/CJhuochai/project-brain/internal/report"
-	"github.com/CJhuochai/project-brain/internal/requirement"
-	"github.com/CJhuochai/project-brain/internal/storage"
-	"github.com/google/uuid"
+	"github.com/CJhuochai/project-brain/internal/coordinator"
 )
 
 type request struct {
@@ -72,11 +67,11 @@ func handle(root string, request request) (any, error) {
 }
 
 func tools() []map[string]any {
-	empty := map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
-	text := map[string]any{"type": "object", "properties": map[string]any{"text": map[string]string{"type": "string", "description": "需求、业务词、路由或符号"}}, "required": []string{"text"}, "additionalProperties": false}
-	changeRange := map[string]any{"type": "object", "properties": map[string]any{"range": map[string]string{"type": "string", "description": "本地 Git commit 或 base..target"}}, "required": []string{"range"}, "additionalProperties": false}
-	inputs := map[string]any{"type": "object", "properties": map[string]any{"text": map[string]string{"type": "string"}, "paths": map[string]any{"type": "array", "items": map[string]string{"type": "string"}}, "source_ref": map[string]string{"type": "string"}}, "additionalProperties": false}
-	reportID := map[string]any{"type": "object", "properties": map[string]any{"id": map[string]string{"type": "string"}}, "required": []string{"id"}, "additionalProperties": false}
+	empty := readSchema(map[string]any{})
+	text := readSchema(map[string]any{"text": map[string]string{"type": "string", "description": "需求、业务词、路由或符号"}})
+	changeRange := readSchema(map[string]any{"range": map[string]string{"type": "string", "description": "本地 Git commit 或 base..target"}})
+	inputs := readSchema(map[string]any{"text": map[string]string{"type": "string"}, "paths": map[string]any{"type": "array", "items": map[string]string{"type": "string"}}, "source_ref": map[string]string{"type": "string"}})
+	reportID := readSchema(map[string]any{"id": map[string]string{"type": "string"}})
 	feedback := map[string]any{"type": "object", "properties": map[string]any{"report_id": map[string]string{"type": "string"}, "subject_kind": map[string]string{"type": "string"}, "subject_key": map[string]string{"type": "string"}, "decision": map[string]any{"type": "string", "enum": []string{"confirmed", "rejected", "rule"}}, "note": map[string]string{"type": "string"}}, "required": []string{"report_id", "subject_kind", "subject_key", "decision", "note"}, "additionalProperties": false}
 	readOnly := map[string]bool{"readOnlyHint": true}
 	return []map[string]any{
@@ -93,85 +88,60 @@ func tools() []map[string]any {
 	}
 }
 
+func readSchema(properties map[string]any) map[string]any {
+	properties["freshness"] = map[string]any{"type": "string", "enum": []string{"stable", "latest"}, "description": "默认 stable；latest 等待合并刷新"}
+	properties["snapshot_id"] = map[string]string{"type": "string", "description": "固定读取已完成快照"}
+	return map[string]any{"type": "object", "properties": properties, "additionalProperties": false}
+}
+
 func call(root, name string, arguments map[string]any) (any, error) {
-	workspaceDir, err := storage.WorkspaceDir(root)
-	if err != nil {
-		return nil, err
-	}
-	db, err := storage.Open(workspaceDir)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
-	var refresh any
-	if name != "get_analysis_report" && name != "record_analysis_feedback" {
-		refresh, err = indexer.Refresh(root, db)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if name == "workspace_status" {
-		return refresh, nil
-	}
-	text, _ := arguments["text"].(string)
-	switch name {
-	case "find_business_context", "get_evidence":
-		return query.Search(db, text)
-	case "trace_code_path":
-		return query.Trace(db, text, 6)
-	case "analyze_change_impact":
-		return query.Impact(db, text, 6)
-	case "analyze_change":
-		revision, _ := arguments["range"].(string)
-		return change.Analyze(root, db, revision)
-	case "analyze_requirement":
-		return requirement.Analyze(db, text)
-	case "analyze_inputs":
-		paths, err := stringSlice(arguments["paths"])
-		if err != nil {
-			return nil, err
-		}
-		source, err := input.Parse(text, paths, stringArgument(arguments, "source_ref"))
-		if err != nil {
-			return nil, err
-		}
-		return report.AnalyzeRequirement(db, source)
-	case "get_analysis_report":
-		return db.Report(stringArgument(arguments, "id"))
-	case "record_analysis_feedback":
-		item := storage.Feedback{ID: uuid.NewString(), ReportID: stringArgument(arguments, "report_id"), SubjectKind: stringArgument(arguments, "subject_kind"), SubjectKey: stringArgument(arguments, "subject_key"), Decision: stringArgument(arguments, "decision"), Note: stringArgument(arguments, "note")}
-		if item.ReportID == "" || item.SubjectKind == "" || item.SubjectKey == "" || item.Decision == "" {
-			return nil, fmt.Errorf("feedback fields are required")
-		}
-		if err := db.RecordFeedback(item); err != nil {
-			return nil, err
-		}
-		return item, nil
-	default:
+	if !knownTool(name) {
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}
+	client, err := coordinator.Ensure(root, os.Args[0])
+	if err != nil {
+		return nil, err
+	}
+	response, err := client.Call(context.Background(), coordinator.Request{Operation: name, Arguments: arguments, Freshness: freshnessArgument(arguments), SnapshotID: stringArgument(arguments, "snapshot_id")})
+	if err != nil {
+		return nil, err
+	}
+	var result any
+	if err := json.Unmarshal(response.Result, &result); err != nil {
+		return nil, err
+	}
+	metadata := map[string]any{"snapshot_id": response.Meta.SnapshotID, "rule_revision": response.Meta.RuleRevision, "freshness": response.Meta.Freshness, "active_baseline": response.Meta.ActiveBaseline}
+	if response.Meta.RefreshTarget != "" {
+		metadata["refresh_target"] = response.Meta.RefreshTarget
+	}
+	if object, ok := result.(map[string]any); ok {
+		for key, value := range metadata {
+			object[key] = value
+		}
+		return object, nil
+	}
+	metadata["result"] = result
+	return metadata, nil
+}
+
+func knownTool(name string) bool {
+	for _, tool := range tools() {
+		if tool["name"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func freshnessArgument(arguments map[string]any) string {
+	value := stringArgument(arguments, "freshness")
+	if value == "latest" {
+		return value
+	}
+	return "stable"
 }
 
 func stringArgument(arguments map[string]any, key string) string {
 	value, _ := arguments[key].(string)
 	return value
-}
-
-func stringSlice(value any) ([]string, error) {
-	if value == nil {
-		return nil, nil
-	}
-	items, ok := value.([]any)
-	if !ok {
-		return nil, fmt.Errorf("paths must be an array of strings")
-	}
-	paths := make([]string, 0, len(items))
-	for _, item := range items {
-		path, ok := item.(string)
-		if !ok {
-			return nil, fmt.Errorf("paths must be an array of strings")
-		}
-		paths = append(paths, path)
-	}
-	return paths, nil
 }

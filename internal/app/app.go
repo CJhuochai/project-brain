@@ -1,166 +1,89 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 
-	"github.com/CJhuochai/project-brain/internal/indexer"
-	"github.com/CJhuochai/project-brain/internal/input"
-	"github.com/CJhuochai/project-brain/internal/query"
-	"github.com/CJhuochai/project-brain/internal/report"
-	"github.com/CJhuochai/project-brain/internal/storage"
+	"github.com/CJhuochai/project-brain/internal/coordinator"
 	"github.com/CJhuochai/project-brain/internal/workspace"
-	"github.com/google/uuid"
 )
 
 func Run(args []string, output io.Writer) error {
 	if len(args) < 2 {
 		return usage()
 	}
-	switch args[0] {
-	case "discover":
+	if args[0] == "discover" {
 		repositories, err := workspace.Discover(args[1])
 		if err != nil {
 			return err
 		}
 		return json.NewEncoder(output).Encode(repositories)
-	case "index":
-		db, err := openDB(args[1])
-		if err != nil {
-			return err
+	}
+	operation, arguments, freshness, err := command(args)
+	if err != nil {
+		return err
+	}
+	client, err := coordinator.Ensure(args[1], os.Args[0])
+	if err != nil {
+		return err
+	}
+	response, err := client.Call(context.Background(), coordinator.Request{Operation: operation, Arguments: arguments, Freshness: freshness})
+	if err != nil {
+		return err
+	}
+	var result any
+	if err := json.Unmarshal(response.Result, &result); err != nil {
+		return err
+	}
+	metadata := map[string]any{"snapshot_id": response.Meta.SnapshotID, "rule_revision": response.Meta.RuleRevision, "freshness": response.Meta.Freshness, "active_baseline": response.Meta.ActiveBaseline}
+	if response.Meta.RefreshTarget != "" {
+		metadata["refresh_target"] = response.Meta.RefreshTarget
+	}
+	if object, ok := result.(map[string]any); ok {
+		for key, value := range metadata {
+			object[key] = value
 		}
-		defer db.Close()
-		result, err := indexer.Index(args[1], db)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(output).Encode(result)
-	case "refresh":
-		db, err := openDB(args[1])
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		result, err := indexer.Refresh(args[1], db)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(output).Encode(result)
-	case "status":
-		db, err := openDB(args[1])
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		repositories, err := workspace.Discover(args[1])
-		if err != nil {
-			return err
-		}
-		result := make([]statusRepository, 0, len(repositories))
-		for _, repository := range repositories {
-			record, err := db.RepositoryRecord(repository.Path)
-			if err != nil {
-				return err
-			}
-			result = append(result, statusRepository{Repository: repository, FileCount: record.FileCount, DiagnosticCount: record.DiagnosticCount, IndexedAt: record.IndexedAt})
-		}
-		return json.NewEncoder(output).Encode(result)
+		return json.NewEncoder(output).Encode(object)
+	}
+	metadata["result"] = result
+	return json.NewEncoder(output).Encode(metadata)
+}
+
+func command(args []string) (string, map[string]any, string, error) {
+	switch args[0] {
+	case "index", "refresh", "status":
+		return "workspace_status", map[string]any{}, "latest", nil
 	case "search", "trace", "impact":
 		if len(args) != 3 {
-			return usage()
+			return "", nil, "", usage()
 		}
-		db, err := openDB(args[1])
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		if args[0] == "search" {
-			result, err := query.Search(db, args[2])
-			if err != nil {
-				return err
-			}
-			return json.NewEncoder(output).Encode(result)
-		}
-		if args[0] == "trace" {
-			result, err := query.Trace(db, args[2], 6)
-			if err != nil {
-				return err
-			}
-			return json.NewEncoder(output).Encode(result)
-		}
-		result, err := query.Impact(db, args[2], 6)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(output).Encode(result)
+		operations := map[string]string{"search": "find_business_context", "trace": "trace_code_path", "impact": "analyze_change_impact"}
+		return operations[args[0]], map[string]any{"text": args[2]}, "stable", nil
 	case "analyze":
 		if len(args) < 3 {
-			return usage()
+			return "", nil, "", usage()
 		}
-		db, err := openDB(args[1])
-		if err != nil {
-			return err
+		paths := make([]any, 0, len(args)-2)
+		for _, path := range args[2:] {
+			paths = append(paths, path)
 		}
-		defer db.Close()
-		if _, err := indexer.Refresh(args[1], db); err != nil {
-			return err
-		}
-		source, err := input.Parse("", args[2:], "")
-		if err != nil {
-			return err
-		}
-		result, err := report.AnalyzeRequirement(db, source)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(output).Encode(result)
+		return "analyze_inputs", map[string]any{"paths": paths}, "latest", nil
 	case "report":
 		if len(args) != 3 {
-			return usage()
+			return "", nil, "", usage()
 		}
-		db, err := openDB(args[1])
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		result, err := db.Report(args[2])
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(output).Encode(result)
+		return "get_analysis_report", map[string]any{"id": args[2]}, "stable", nil
 	case "feedback":
 		if len(args) != 7 {
-			return usage()
+			return "", nil, "", usage()
 		}
-		db, err := openDB(args[1])
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		item := storage.Feedback{ID: uuid.NewString(), ReportID: args[2], SubjectKind: args[3], SubjectKey: args[4], Decision: args[5], Note: args[6]}
-		if err := db.RecordFeedback(item); err != nil {
-			return err
-		}
-		return json.NewEncoder(output).Encode(item)
+		return "record_analysis_feedback", map[string]any{"report_id": args[2], "subject_kind": args[3], "subject_key": args[4], "decision": args[5], "note": args[6]}, "stable", nil
 	default:
-		return usage()
+		return "", nil, "", usage()
 	}
-}
-
-type statusRepository struct {
-	workspace.Repository
-	FileCount       int    `json:"file_count"`
-	DiagnosticCount int    `json:"diagnostic_count"`
-	IndexedAt       string `json:"indexed_at,omitempty"`
-}
-
-func openDB(root string) (*storage.DB, error) {
-	workspaceDir, err := storage.WorkspaceDir(root)
-	if err != nil {
-		return nil, err
-	}
-	return storage.Open(workspaceDir)
 }
 
 func usage() error {
