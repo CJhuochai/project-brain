@@ -78,6 +78,17 @@ args = ["mcp", "/absolute/path/to/workspace"]
 
 The optional adapter at `codex-plugin/project-brain-codex` only tells Codex to use `analyze_requirement` first; it contains neither business source nor indexes.
 
+## 1.2 concurrency consistency
+
+Version 1.2 runs one local coordinator per workspace, so multiple Codex sessions and CLI calls no longer write the same SQLite index. Source evidence is stored in immutable `snapshot-<id>.sqlite` files; `control.sqlite` holds only coordination state, reports, feedback, and rule revisions.
+
+- Default `stable` returns the latest complete snapshot immediately and marks a changed baseline as `refreshing`.
+- `latest` waits for the merged refresh; on timeout it still returns a complete older snapshot.
+- Read tools accept `freshness: "stable" | "latest"` and an optional fixed `snapshot_id`; responses include `snapshot_id`, `rule_revision`, `freshness`, and `active_baseline`.
+- A report records the snapshot and rule revision selected at its start; later feedback never rewrites history.
+
+See the [v1.2 architecture note](docs/architecture-v1.2.md). After a crash, the next `status` or MCP call removes unfinished staging snapshots and continues from the last complete snapshot. Removing a workspace data directory also removes its local index, reports, and feedback.
+
 ## Privacy and limits
 
 - Indexes live in `%LOCALAPPDATA%\ProjectBrain` (or the XDG local data directory). Delete a workspace-hash directory to erase that workspace's index.
