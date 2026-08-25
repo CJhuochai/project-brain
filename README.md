@@ -22,14 +22,14 @@
 
 ## 安装与使用
 
-从 [v1.0.0](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0) 下载与你平台匹配的文件；下载校验文件后，可用 `sha256sum -c <文件名>.sha256`（macOS/Linux）或 `Get-FileHash <文件名>`（Windows）校验。
+从 [最新发布版本](https://github.com/CJhuochai/project-brain/releases/latest) 下载与你平台匹配的文件；下载校验文件后，可用 `sha256sum -c <文件名>.sha256`（macOS/Linux）或 `Get-FileHash <文件名>`（Windows）校验。
 
 | 平台 | 发布文件 | 运行方式 |
 | --- | --- | --- |
-| Windows x64 | `project-brain-1.0.0-windows-amd64.exe` | `./project-brain-1.0.0-windows-amd64.exe status <工作区>` |
-| Linux x64 | `project-brain-1.0.0-linux-amd64` | `chmod +x project-brain-1.0.0-linux-amd64` 后执行 `./project-brain-1.0.0-linux-amd64 status <工作区>` |
-| macOS Intel | `project-brain-1.0.0-darwin-amd64` | `chmod +x project-brain-1.0.0-darwin-amd64` 后执行 |
-| macOS Apple Silicon | `project-brain-1.0.0-darwin-arm64` | `chmod +x project-brain-1.0.0-darwin-arm64` 后执行 |
+| Windows x64 | `project-brain-<版本>-windows-amd64.exe` | `./project-brain-<版本>-windows-amd64.exe status <工作区>` |
+| Linux x64 | `project-brain-<版本>-linux-amd64` | `chmod +x project-brain-<版本>-linux-amd64` 后执行 |
+| macOS Intel | `project-brain-<版本>-darwin-amd64` | `chmod +x project-brain-<版本>-darwin-amd64` 后执行 |
+| macOS Apple Silicon | `project-brain-<版本>-darwin-arm64` | `chmod +x project-brain-<版本>-darwin-arm64` 后执行 |
 
 也可本地构建（需要 Go 1.25+）：
 
@@ -74,7 +74,7 @@ bin\project-brain.exe feedback E:\BasisProject <报告ID> repository entry-servi
 
 ```toml
 [mcp_servers.project_brain]
-command = "/absolute/path/project-brain-1.0.0-darwin-arm64"
+command = "/absolute/path/project-brain-<版本>-darwin-arm64"
 args = ["mcp", "/absolute/path/to/workspace"]
 ```
 
@@ -103,6 +103,7 @@ args = ["mcp", "/absolute/path/to/workspace"]
 
 - [1.0 本地验收记录](docs/acceptance/project-brain-1.0.md)：30 个仓库发现、29 个完成索引、11,172 个文件；已用真实需求和 Git 提交验证。
 - [v1.0.0 发布页](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0)：提供 Windows x64、Linux x64、macOS Intel、macOS Apple Silicon 可执行文件及 SHA-256 校验文件。
+- [变更日志](CHANGELOG.md)：版本功能与修复记录；发布由推送 `vX.Y.Z` 标签自动完成构建、校验和 GitHub Release 创建。
 
 ## 许可证
 
