@@ -29,6 +29,7 @@ type Server struct {
 	done          chan struct{}
 	once          sync.Once
 	refreshMu     sync.Mutex
+	feedbackMu    sync.Mutex
 	refreshDone   chan struct{}
 	refreshError  error
 	refreshTarget string
@@ -175,6 +176,10 @@ func (server *Server) execute(request Request) Response {
 		return Response{Result: encoded, Meta: meta}
 	}
 	if request.Operation == "get_analysis_report" || request.Operation == "record_analysis_feedback" {
+		if request.Operation == "record_analysis_feedback" {
+			server.feedbackMu.Lock()
+			defer server.feedbackMu.Unlock()
+		}
 		result, err := service.Execute(server.root, nil, server.control, request.Operation, request.Arguments, report.Provenance{})
 		return server.result(result, meta, err)
 	}
