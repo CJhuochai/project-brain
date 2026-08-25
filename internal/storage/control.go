@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -80,6 +81,7 @@ CREATE TABLE IF NOT EXISTS rules (
   UNIQUE(kind, pattern, target)
 );
 CREATE TABLE IF NOT EXISTS control_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS rule_snapshots (revision INTEGER PRIMARY KEY, rules_json TEXT NOT NULL);
 `); err != nil {
 		return err
 	}
@@ -138,6 +140,9 @@ func (control *Control) migrateLegacyIndex() error {
 		return err
 	}
 	if _, err := transaction.Exec(`INSERT INTO control_meta(key, value) VALUES('rule_revision', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, revision); err != nil {
+		return err
+	}
+	if err := saveRuleSnapshot(transaction, revision); err != nil {
 		return err
 	}
 	return transaction.Commit()
@@ -263,6 +268,27 @@ func (control *Control) Rules(kind string) ([]Rule, int64, error) {
 	return rules, revision, err
 }
 
+func (control *Control) RulesAtRevision(kind string, revision int64) ([]Rule, error) {
+	if revision == 0 {
+		return nil, nil
+	}
+	var encoded string
+	if err := control.QueryRow(`SELECT rules_json FROM rule_snapshots WHERE revision = ?`, revision).Scan(&encoded); err != nil {
+		return nil, err
+	}
+	var all []Rule
+	if err := json.Unmarshal([]byte(encoded), &all); err != nil {
+		return nil, err
+	}
+	var rules []Rule
+	for _, rule := range all {
+		if rule.Kind == kind {
+			rules = append(rules, rule)
+		}
+	}
+	return rules, nil
+}
+
 func (control *Control) RuleRevision() (int64, error) {
 	var revision int64
 	err := control.QueryRow(`SELECT CAST(value AS INTEGER) FROM control_meta WHERE key = 'rule_revision'`).Scan(&revision)
@@ -291,8 +317,36 @@ func (control *Control) RecordFeedback(feedback Feedback) (int64, error) {
 	if err := transaction.QueryRow(`SELECT CAST(value AS INTEGER) FROM control_meta WHERE key = 'rule_revision'`).Scan(&revision); err != nil {
 		return 0, err
 	}
+	if err := saveRuleSnapshot(transaction, revision); err != nil {
+		return 0, err
+	}
 	if err := transaction.Commit(); err != nil {
 		return 0, err
 	}
 	return revision, nil
+}
+
+func saveRuleSnapshot(transaction *sql.Tx, revision int64) error {
+	rows, err := transaction.Query(`SELECT kind, pattern, target, confidence, note FROM rules ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var rules []Rule
+	for rows.Next() {
+		var rule Rule
+		if err := rows.Scan(&rule.Kind, &rule.Pattern, &rule.Target, &rule.Confidence, &rule.Note); err != nil {
+			return err
+		}
+		rules = append(rules, rule)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(rules)
+	if err != nil {
+		return err
+	}
+	_, err = transaction.Exec(`INSERT OR REPLACE INTO rule_snapshots(revision, rules_json) VALUES(?, ?)`, revision, string(encoded))
+	return err
 }

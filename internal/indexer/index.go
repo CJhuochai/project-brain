@@ -76,6 +76,36 @@ func Refresh(root string, db *storage.DB) (RefreshResult, error) {
 	return result, nil
 }
 
+// Status reads one completed snapshot without triggering an index write.
+func Status(root string, db *storage.DB) (RefreshResult, error) {
+	repositories, err := workspace.Discover(root)
+	if err != nil {
+		return RefreshResult{}, err
+	}
+	result := RefreshResult{IndexState: "baseline_unknown", Repositories: make([]RepositoryStatus, 0, len(repositories))}
+	known := false
+	for _, repository := range repositories {
+		if repository.BaselineState != workspace.BaselineKnown {
+			result.Repositories = append(result.Repositories, RepositoryStatus{Repository: repository, IndexState: "baseline_unknown", StaleReason: "未识别远程默认主分支"})
+			continue
+		}
+		known = true
+		record, err := db.RepositoryRecord(repository.Path)
+		if err != nil {
+			return RefreshResult{}, err
+		}
+		state := "up_to_date"
+		if record.BaselineCommit != repository.BaselineCommit {
+			state = "stale"
+		}
+		result.Repositories = append(result.Repositories, RepositoryStatus{Repository: repository, IndexState: state, FileCount: record.FileCount, DiagnosticCount: record.DiagnosticCount, IndexedAt: record.IndexedAt})
+	}
+	if known {
+		result.IndexState = "up_to_date"
+	}
+	return result, nil
+}
+
 func Index(root string, db *storage.DB) (Result, error) {
 	repositories, err := workspace.Discover(root)
 	if err != nil {
