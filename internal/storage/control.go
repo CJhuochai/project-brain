@@ -34,11 +34,26 @@ func OpenControl(workspaceDir string) (*Control, error) {
 		return nil, err
 	}
 	control := &Control{DB: db, workspaceDir: workspaceDir}
-	if _, err := control.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
+	if _, err := control.Exec(`PRAGMA busy_timeout=5000;`); err != nil {
 		_ = control.Close()
 		return nil, err
 	}
 	if err := control.initializeAndMigrate(); err != nil {
+		_ = control.Close()
+		return nil, err
+	}
+	return control, nil
+}
+
+// OpenControlRead never executes DDL or journaling pragmas. It is used by
+// thin clients that only need the endpoint and token of an existing server.
+func OpenControlRead(workspaceDir string) (*Control, error) {
+	db, err := sql.Open("sqlite", filepath.Join(workspaceDir, "control.sqlite"))
+	if err != nil {
+		return nil, err
+	}
+	control := &Control{DB: db, workspaceDir: workspaceDir}
+	if _, err := control.Exec(`PRAGMA busy_timeout=5000`); err != nil {
 		_ = control.Close()
 		return nil, err
 	}

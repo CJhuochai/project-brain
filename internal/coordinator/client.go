@@ -60,16 +60,19 @@ func Ensure(root, executable string) (*Client, error) {
 		}
 	}
 	deadline := time.Now().Add(5 * time.Second)
+	var lastErr error
 	for time.Now().Before(deadline) {
 		if client, err := healthyClient(root); err == nil {
 			return client, nil
+		} else {
+			lastErr = err
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	if err == nil {
 		release()
 	}
-	return nil, fmt.Errorf("coordinator did not become healthy for %s", filepath.Clean(root))
+	return nil, fmt.Errorf("coordinator did not become healthy for %s: %w", filepath.Clean(root), lastErr)
 }
 
 func staleLease(workspaceDir string) bool {
@@ -95,7 +98,7 @@ func Connect(root string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	control, err := storage.OpenControl(workspaceDir)
+	control, err := storage.OpenControlRead(workspaceDir)
 	if err != nil {
 		return nil, err
 	}

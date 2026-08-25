@@ -38,7 +38,18 @@ func Run(args []string, output io.Writer) error {
 	if err := json.Unmarshal(response.Result, &result); err != nil {
 		return err
 	}
-	return json.NewEncoder(output).Encode(result)
+	metadata := map[string]any{"snapshot_id": response.Meta.SnapshotID, "rule_revision": response.Meta.RuleRevision, "freshness": response.Meta.Freshness, "active_baseline": response.Meta.ActiveBaseline}
+	if response.Meta.RefreshTarget != "" {
+		metadata["refresh_target"] = response.Meta.RefreshTarget
+	}
+	if object, ok := result.(map[string]any); ok {
+		for key, value := range metadata {
+			object[key] = value
+		}
+		return json.NewEncoder(output).Encode(object)
+	}
+	metadata["result"] = result
+	return json.NewEncoder(output).Encode(metadata)
 }
 
 func command(args []string) (string, map[string]any, string, error) {
