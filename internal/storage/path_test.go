@@ -2,12 +2,19 @@ package storage
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestWorkspaceDirUsesLocalAppDataAndStablePathHash(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", `C:\\Users\\tester\\AppData\\Local`)
-	t.Setenv("XDG_DATA_HOME", "")
+	wantDataDir := filepath.Join(`C:\\Users\\tester\\AppData\\Local`, "ProjectBrain")
+	if runtime.GOOS != "windows" {
+		t.Setenv("XDG_DATA_HOME", "/tmp/project-brain-test")
+		wantDataDir = filepath.Join("/tmp/project-brain-test", "project-brain")
+	} else {
+		t.Setenv("XDG_DATA_HOME", "")
+	}
 
 	first, err := WorkspaceDir(`E:\\BasisProject`)
 	if err != nil {
@@ -18,7 +25,7 @@ func TestWorkspaceDirUsesLocalAppDataAndStablePathHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantPrefix := filepath.Join(`C:\\Users\\tester\\AppData\\Local`, "ProjectBrain", "workspaces")
+	wantPrefix := filepath.Join(wantDataDir, "workspaces")
 	if filepath.Dir(first) != wantPrefix {
 		t.Fatalf("workspace dir = %q, want parent %q", first, wantPrefix)
 	}
