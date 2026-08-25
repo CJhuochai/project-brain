@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/CJhuochai/project-brain/internal/service"
+	"github.com/CJhuochai/project-brain/internal/storage"
 )
 
 // Break caught: giving each client its own coordinator endpoint would restore
@@ -159,5 +160,29 @@ func TestEnsureReusesHealthyCoordinator(t *testing.T) {
 	response, err := client.Call(context.Background(), Request{Operation: "health"})
 	if err != nil || response.Meta.SnapshotID == "" {
 		t.Fatalf("response=%#v err=%v", response, err)
+	}
+}
+
+func TestStartRemovesInterruptedStagingFile(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	workspaceDir, err := storage.WorkspaceDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	staging := filepath.Join(workspaceDir, "snapshot-003.sqlite.staging")
+	if err := os.WriteFile(staging, []byte("interrupted"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server, err := Start(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+	if _, err := os.Stat(staging); !os.IsNotExist(err) {
+		t.Fatalf("staging remains: %v", err)
 	}
 }
