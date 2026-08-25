@@ -90,3 +90,25 @@ func TestOpenSnapshotReadOnlyRejectsWrite(t *testing.T) {
 		t.Fatal("read-only snapshot accepted a write")
 	}
 }
+
+func TestRulesAtRevisionKeepsHistoricalFeedbackView(t *testing.T) {
+	control, err := OpenControl(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = control.Close() })
+	if _, err := control.RecordFeedback(Feedback{ID: "f1", ReportID: "r", SubjectKind: "repository", SubjectKey: "student", Decision: "confirmed"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := control.RecordFeedback(Feedback{ID: "f2", ReportID: "r", SubjectKind: "repository", SubjectKey: "student", Decision: "rejected"}); err != nil {
+		t.Fatal(err)
+	}
+	oldRules, err := control.RulesAtRevision("repository", 1)
+	if err != nil || len(oldRules) != 1 || oldRules[0].Target != "confirmed" {
+		t.Fatalf("old=%#v err=%v", oldRules, err)
+	}
+	newRules, err := control.RulesAtRevision("repository", 2)
+	if err != nil || len(newRules) != 2 {
+		t.Fatalf("new=%#v err=%v", newRules, err)
+	}
+}

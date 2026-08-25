@@ -47,6 +47,9 @@ func openSQLite(path string, writable bool, initialize bool) (*DB, error) {
 			_ = db.Close()
 			return nil, err
 		}
+	} else if _, err := db.Exec(`PRAGMA busy_timeout=5000`); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
 	if initialize {
 		if err := db.initialize(); err != nil {

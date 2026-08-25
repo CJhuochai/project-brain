@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/CJhuochai/project-brain/internal/app"
+	"github.com/CJhuochai/project-brain/internal/coordinator"
 	"github.com/CJhuochai/project-brain/internal/mcp"
 )
 
@@ -17,6 +18,13 @@ func main() {
 	}
 	if len(os.Args) == 3 && os.Args[1] == "mcp" {
 		if err := mcp.Serve(os.Stdin, os.Stdout, os.Args[2]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		return
+	}
+	if len(os.Args) == 3 && os.Args[1] == "coordinator" {
+		if err := coordinator.Serve(os.Args[2]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(2)
 		}
