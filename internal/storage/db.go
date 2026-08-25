@@ -2,8 +2,10 @@ package storage
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -16,14 +18,41 @@ func Open(workspaceDir string) (*DB, error) {
 	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		return nil, err
 	}
-	database, err := sql.Open("sqlite", filepath.Join(workspaceDir, "index.sqlite"))
+	return openSQLite(filepath.Join(workspaceDir, "index.sqlite"), true, true)
+}
+
+// OpenSnapshot opens a completed snapshot for querying or a staging snapshot
+// for indexing. Completed snapshots are always opened read-only.
+func OpenSnapshot(path string, writable bool) (*DB, error) {
+	if writable {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return nil, err
+		}
+	}
+	return openSQLite(path, writable, writable)
+}
+
+func openSQLite(path string, writable bool, initialize bool) (*DB, error) {
+	dsn := path
+	if !writable {
+		dsn = fmt.Sprintf("file:%s?mode=ro", strings.ReplaceAll(filepath.ToSlash(path), "#", "%23"))
+	}
+	database, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
 	db := &DB{DB: database}
-	if err := db.initialize(); err != nil {
-		_ = db.Close()
-		return nil, err
+	if writable {
+		if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+	}
+	if initialize {
+		if err := db.initialize(); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
 	}
 	return db, nil
 }
