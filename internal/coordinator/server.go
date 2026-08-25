@@ -57,6 +57,11 @@ func Start(root string) (*Server, error) {
 		release()
 		return nil, err
 	}
+	if _, err := control.Exec(`PRAGMA journal_mode=WAL`); err != nil {
+		_ = control.Close()
+		release()
+		return nil, err
+	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		_ = control.Close()
@@ -136,12 +141,16 @@ func (server *Server) handle(connection net.Conn) {
 }
 
 func (server *Server) execute(request Request) Response {
+	if request.Operation == "health" {
+		active, err := server.control.ActiveSnapshot()
+		if err != nil {
+			return Response{Error: err.Error()}
+		}
+		return Response{Result: json.RawMessage(`{"ok":true}`), Meta: server.metadata(active, "up_to_date", "")}
+	}
 	snapshot, meta, err := server.chooseSnapshot(request)
 	if err != nil {
 		return Response{Error: err.Error()}
-	}
-	if request.Operation == "health" {
-		return Response{Result: json.RawMessage(`{"ok":true}`), Meta: meta}
 	}
 	if request.Operation == "workspace_status" {
 		server.refreshMu.Lock()
