@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/CJhuochai/project-brain/internal/coordinator"
 )
 
 func TestServeListsToolsAndRejectsUnknownTool(t *testing.T) {
@@ -68,8 +70,13 @@ func TestWorkspaceStatusReportsPerRepositoryFreshness(t *testing.T) {
 
 func workspaceStatus(t *testing.T, root string) string {
 	t.Helper()
+	server, err := coordinator.Start(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
 	var output bytes.Buffer
-	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"workspace_status","arguments":{}}}` + "\n")
+	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"workspace_status","arguments":{"freshness":"latest"}}}` + "\n")
 	if err := Serve(input, &output, root); err != nil {
 		t.Fatal(err)
 	}
@@ -160,6 +167,23 @@ func TestToolsExposeReportLoopContracts(t *testing.T) {
 		}
 		if !found {
 			t.Fatalf("missing tool %s: %#v", want.name, listed)
+		}
+	}
+}
+
+// Break caught: omitting freshness/snapshot selection would let an MCP caller
+// unknowingly read a different index view than another concurrent session.
+func TestReadToolsExposeSnapshotSelection(t *testing.T) {
+	for _, tool := range tools() {
+		if tool["name"] == "record_analysis_feedback" {
+			continue
+		}
+		properties := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+		if _, ok := properties["freshness"]; !ok {
+			t.Fatalf("%s missing freshness: %#v", tool["name"], properties)
+		}
+		if _, ok := properties["snapshot_id"]; !ok {
+			t.Fatalf("%s missing snapshot_id: %#v", tool["name"], properties)
 		}
 	}
 }

@@ -22,14 +22,14 @@ English | [简体中文](README.md)
 
 ## Install and use
 
-Download the matching binary from [v1.0.0](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0). Verify it with `sha256sum -c <file>.sha256` on macOS/Linux, or `Get-FileHash <file>` on Windows.
+Download the matching binary from the [latest release](https://github.com/CJhuochai/project-brain/releases/latest). Verify it with `sha256sum -c <file>.sha256` on macOS/Linux, or `Get-FileHash <file>` on Windows.
 
 | Platform | Release file | Run |
 | --- | --- | --- |
-| Windows x64 | `project-brain-1.0.0-windows-amd64.exe` | `./project-brain-1.0.0-windows-amd64.exe status <workspace>` |
-| Linux x64 | `project-brain-1.0.0-linux-amd64` | Run `chmod +x project-brain-1.0.0-linux-amd64`, then `./project-brain-1.0.0-linux-amd64 status <workspace>` |
-| macOS Intel | `project-brain-1.0.0-darwin-amd64` | Run `chmod +x project-brain-1.0.0-darwin-amd64`, then execute it |
-| macOS Apple Silicon | `project-brain-1.0.0-darwin-arm64` | Run `chmod +x project-brain-1.0.0-darwin-arm64`, then execute it |
+| Windows x64 | `project-brain-<version>-windows-amd64.exe` | `./project-brain-<version>-windows-amd64.exe status <workspace>` |
+| Linux x64 | `project-brain-<version>-linux-amd64` | Run `chmod +x project-brain-<version>-linux-amd64`, then execute it |
+| macOS Intel | `project-brain-<version>-darwin-amd64` | Run `chmod +x project-brain-<version>-darwin-amd64`, then execute it |
+| macOS Apple Silicon | `project-brain-<version>-darwin-arm64` | Run `chmod +x project-brain-<version>-darwin-arm64`, then execute it |
 
 Or build locally with Go 1.25+:
 
@@ -72,11 +72,22 @@ Copy [examples/codex-config.toml](examples/codex-config.toml), update the local 
 
 ```toml
 [mcp_servers.project_brain]
-command = "/absolute/path/project-brain-1.0.0-darwin-arm64"
+command = "/absolute/path/project-brain-<version>-darwin-arm64"
 args = ["mcp", "/absolute/path/to/workspace"]
 ```
 
 The optional adapter at `codex-plugin/project-brain-codex` only tells Codex to use `analyze_requirement` first; it contains neither business source nor indexes.
+
+## 1.2 concurrency consistency
+
+Version 1.2 runs one local coordinator per workspace, so multiple Codex sessions and CLI calls no longer write the same SQLite index. Source evidence is stored in immutable `snapshot-<id>.sqlite` files; `control.sqlite` holds only coordination state, reports, feedback, and rule revisions.
+
+- Default `stable` returns the latest complete snapshot immediately and marks a changed baseline as `refreshing`.
+- `latest` waits for the merged refresh; on timeout it still returns a complete older snapshot.
+- Read tools accept `freshness: "stable" | "latest"` and an optional fixed `snapshot_id`; responses include `snapshot_id`, `rule_revision`, `freshness`, and `active_baseline`.
+- A report records the snapshot and rule revision selected at its start; later feedback never rewrites history.
+
+See the [v1.2 architecture note](docs/architecture-v1.2.md). After a crash, the next `status` or MCP call removes unfinished staging snapshots and continues from the last complete snapshot. Removing a workspace data directory also removes its local index, reports, and feedback.
 
 ## Privacy and limits
 
@@ -88,6 +99,7 @@ The optional adapter at `codex-plugin/project-brain-codex` only tells Codex to u
 
 - [1.0 local acceptance record](docs/acceptance/project-brain-1.0.md): 30 repositories discovered, 29 indexed, and 11,172 files indexed; validated against real requirement documents and a Git commit.
 - [v1.0.0 release](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0): Windows x64, Linux x64, macOS Intel, and macOS Apple Silicon executables with SHA-256 checksums.
+- [Changelog](CHANGELOG.md): user-facing changes. Pushing a `vX.Y.Z` tag runs tests, builds assets, checks their layout, and creates the GitHub Release automatically.
 
 ## License
 

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/CJhuochai/project-brain/internal/coordinator"
 )
 
 func TestRunDiscoverWritesRepositoryJSON(t *testing.T) {
@@ -39,6 +41,11 @@ func TestRunIndexWritesBaselineIndexSummary(t *testing.T) {
 	runGit(t, repo, "update-ref", "refs/remotes/origin/main", commit)
 	runGit(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
 	t.Setenv("LOCALAPPDATA", t.TempDir())
+	server, err := coordinator.Start(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
 
 	var output bytes.Buffer
 	if err := Run([]string{"index", root}, &output); err != nil {
@@ -65,6 +72,11 @@ func TestRunStatusWritesIndexedFileCount(t *testing.T) {
 	runGit(t, repo, "update-ref", "refs/remotes/origin/main", commit)
 	runGit(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
 	t.Setenv("LOCALAPPDATA", t.TempDir())
+	server, err := coordinator.Start(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
 	if err := Run([]string{"index", root}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
@@ -93,6 +105,11 @@ func TestRunRefreshWritesFreshnessSummary(t *testing.T) {
 	runGit(t, repo, "update-ref", "refs/remotes/origin/main", commit)
 	runGit(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
 	t.Setenv("LOCALAPPDATA", t.TempDir())
+	server, err := coordinator.Start(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
 	if err := Run([]string{"index", root}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
