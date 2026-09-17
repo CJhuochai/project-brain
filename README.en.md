@@ -18,7 +18,7 @@ v2.0 adds ranked exact/full-text search, stable symbol IDs, query coverage, stag
 
 ![Project Brain architecture](assets/project-brain-architecture-en.svg)
 
-From the Agent/CLI entry point through the local coordinator, immutable index snapshots, and analysis reports, all data stays on the user's machine. Business repositories are scanned read-only; concurrent sessions read one complete snapshot until a refresh is atomically activated.
+From the Agent/CLI entry point through the local coordinator, immutable index snapshots, and analysis reports, PB stores indexes and reports locally. Business repositories are scanned read-only; concurrent sessions read one complete snapshot until a refresh is atomically activated.
 
 ## What it does
 
@@ -49,7 +49,7 @@ go build -o bin\project-brain.exe ./cmd/project-brain
 bin\project-brain.exe discover E:\ExampleWorkspace
 bin\project-brain.exe index E:\ExampleWorkspace
 bin\project-brain.exe status E:\ExampleWorkspace
-bin\project-brain.exe search E:\ExampleWorkspace groupSubmit
+bin\project-brain.exe search E:\ExampleWorkspace submitOrder
 bin\project-brain.exe trace E:\ExampleWorkspace com.example.EntryController
 bin\project-brain.exe impact E:\ExampleWorkspace com.example.EntryService
 ```
@@ -101,13 +101,19 @@ See the [v1.2 architecture note](docs/architecture-v1.2.md). After a crash, the 
 
 - Indexes live in `%LOCALAPPDATA%\ProjectBrain` (or the XDG local data directory). Delete a workspace-hash directory to erase that workspace's index.
 - Project Brain never checks out, fetches, commits, builds, tests, or writes to business repositories.
-- Version 1.0 uses deterministic text extraction for Java/Spring, MyBatis XML, and Maven. Reflection, dynamic SQL, and runtime routing require human verification.
+- Project Brain uses deterministic text extraction for Java/Spring, MyBatis XML, and Maven. Reflection, dynamic SQL, and runtime routing require human verification.
 
 ## Verification and release
 
 - [1.0 local acceptance record](docs/acceptance/project-brain-1.0.md): 30 repositories discovered, 29 indexed, and 11,172 files indexed; validated against real requirement documents and a Git commit.
 - [v1.0.0 release](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0): Windows x64, Linux x64, macOS Intel, and macOS Apple Silicon executables with SHA-256 checksums.
 - [Changelog](CHANGELOG.md): user-facing changes. Pushing a `vX.Y.Z` tag runs tests, builds assets, checks their layout, and creates the GitHub Release automatically.
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Use synthetic reproductions; never attach private source, requirements, indexes or reports. MCP results are delivered to the client; forwarding to a remote model depends on client configuration.
+
+See [v2.0.0 validation and limitations](docs/validation/v2.0.0.md).
 
 ## License
 

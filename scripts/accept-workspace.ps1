@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)][string]$Executable,
-    [string]$Workspace = "E:\ExampleWorkspace"
+    [Parameter(Mandatory = $true)][string]$Workspace
 )
 
 $outputs = @(& "$PSScriptRoot\verify-readonly.ps1" -Workspace $Workspace -Action {

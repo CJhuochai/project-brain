@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory = $true)][string]$Executable,
     [Parameter(Mandatory = $true)][string]$OutputDirectory,
-    [string]$Workspace = "E:\ExampleWorkspace"
+    [Parameter(Mandatory = $true)][string]$Workspace,
+    [Parameter(Mandatory = $true)][ValidateCount(4,4)][string[]]$Queries,
+    [Parameter(Mandatory = $true)][string]$Requirement
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,12 +28,12 @@ if ($status.freshness -ne "up_to_date") { throw "Initial refresh did not complet
 $timer.Stop()
 $status | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "status.json")
 $measurements = @()
-foreach ($query in @("ExampleController", "ExampleApplication", "访校活动", "groupSubmit")) {
+foreach ($query in $Queries) {
     $watch = [Diagnostics.Stopwatch]::StartNew()
     $search = (& $Executable search $Workspace $query --limit 10) | ConvertFrom-Json
     if ($LASTEXITCODE -ne 0) { throw "search failed: $query" }
     $watch.Stop()
-    $search | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "$query.search.json")
+    $search | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "query-$($measurements.Count).search.json")
     $measurements += [pscustomobject]@{ query = $query; elapsed_ms = $watch.ElapsedMilliseconds; evidence_count = @($search.evidence).Count; first = @($search.evidence)[0]; coverage = $search.coverage }
 }
 $symbol = @($measurements[0].first)[0]
@@ -44,7 +46,7 @@ foreach ($operation in @("context", "flow", "impact")) {
 $detail = (& $Executable context $Workspace $symbol.id --repository $symbol.repository --limit 10 --detail) | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0 -or $detail.symbol.id -ne $symbol.id) { throw "Detail expansion failed" }
 $detail | ConvertTo-Json -Depth 25 | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "context.detail.json")
-$method = @((Get-Content -Raw (Join-Path $OutputDirectory "groupSubmit.search.json") | ConvertFrom-Json).evidence | Where-Object {$_.id -and $_.kind -like '*_method'})[0]
+$method = @((Get-Content -Raw (Join-Path $OutputDirectory "query-3.search.json") | ConvertFrom-Json).evidence | Where-Object {$_.id -and $_.kind -like '*_method'})[0]
 if (!$method) { throw "No method identity found" }
 $methodFlow = (& $Executable flow $Workspace $method.id --repository $method.repository --limit 10) | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0 -or !$methodFlow.flows) { throw "Method flow failed" }
@@ -56,13 +58,13 @@ $mcpRequests = @(
     @{ jsonrpc = "2.0"; id = 1; method = "initialize" },
     @{ jsonrpc = "2.0"; method = "notifications/initialized" },
     @{ jsonrpc = "2.0"; id = 2; method = "tools/list" },
-    @{ jsonrpc = "2.0"; id = 3; method = "tools/call"; params = @{ name = "analyze_requirement"; arguments = @{ text = "调整 ExampleController 的访校活动报名截止规则"; snapshot_id = $status.snapshot_id } } }
+    @{ jsonrpc = "2.0"; id = 3; method = "tools/call"; params = @{ name = "analyze_requirement"; arguments = @{ text = $Requirement; snapshot_id = $status.snapshot_id } } }
 ) | ForEach-Object { $_ | ConvertTo-Json -Depth 8 -Compress }
 $mcp = @($mcpRequests | & $Executable mcp $Workspace)
 if ($LASTEXITCODE -ne 0 -or $mcp.Count -ne 3) { throw "MCP exchange failed" }
 $mcp | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "mcp.jsonl")
-$requirement = ($mcp[-1] | ConvertFrom-Json).result.content[0].text | ConvertFrom-Json
-if (!$requirement.evidence) { throw "requirement returned no evidence" }
+$requirementReport = ($mcp[-1] | ConvertFrom-Json).result.content[0].text | ConvertFrom-Json
+if (!$requirementReport.evidence) { throw "requirement returned no evidence" }
 $after = RepositoryState
 $after | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "business-state.after.json")
 if ($before -ne $after) { throw "Business repository status or refs changed" }
@@ -75,8 +77,8 @@ if ($before -ne $after) { throw "Business repository status or refs changed" }
     queries = $measurements
     contracts_returned = @($contracts.contracts).Count
     contracts_coverage = $contracts.coverage
-    requirement_first_repository = @($requirement.repositories)[0]
-    requirement_coverage = $requirement.coverage
+    requirement_first_repository = @($requirementReport.repositories)[0]
+    requirement_coverage = $requirementReport.coverage
     business_repository_state_unchanged = $true
     context_summary_bytes = (Get-Item (Join-Path $OutputDirectory "context.json")).Length
     context_detail_bytes = (Get-Item (Join-Path $OutputDirectory "context.detail.json")).Length
