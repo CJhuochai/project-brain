@@ -1,3 +1,21 @@
-# Historical acceptance record
+# Project Brain 1.0 本地验收记录
 
-Private workspace requirement and source identifiers have been removed. Original evidence is retained in a private backup. This historical record is not a reproducible public benchmark.
+验收日期：2026-08-24
+
+## 环境与安全边界
+
+- 工作区：`E:\ExampleWorkspace`
+- 发现仓库：30；完成基线索引：29；索引文件：11,172；待更新文件：0。
+- 只读取本地 Git 的 `origin/HEAD` 与对象库；验收前后业务工作区均未被工具修改。
+
+## 需求与提交验收（脱敏摘要）
+
+使用两个本地业务需求和一个本地 Git 提交验证候选仓库定位、入口与调用关系、数据关系、跨仓库风险和提交归属识别。结果符合当时验收预期。
+
+为避免公开第三方内部信息，不保留真实需求文件名、业务规则、仓库名、类名、表名或提交标识。上述结果为历史人工验收记录，不是公开可复现的准确率基准。
+
+## 结论与已知边界
+
+1. MCP 可自动增量刷新默认基线，并在需求或提交输入后返回候选仓库、入口、修改/关联点、调用链、风险和待确认项。
+2. 中文长需求采用三字业务片段，避免“招生”“学生”等泛词主导结果；影响追踪最多处理 8 个方法入口、每个入口最多返回 20 条路径，避免长需求阻塞。
+3. 结果是基于静态证据的候选与确定关系；反射、动态 SQL、运行时路由及未命中的原型字段仍需在开发前人工确认。

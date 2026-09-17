@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$Executable,
-    [string]$Workspace = "E:\ExampleWorkspace"
+    [Parameter(Mandatory = $true)][string]$Workspace,
+    [Parameter(Mandatory = $true)][string]$Query
 )
 
 function Get-RepositoryState {
@@ -15,7 +16,7 @@ $before = Get-RepositoryState
 $measurement = Measure-Command { $statusText = & $Executable status $Workspace }
 $status = $statusText | ConvertFrom-Json
 $jobs = 1..3 | ForEach-Object {
-    Start-Job -ScriptBlock { param($path, $root) & $path search $root AdmitService } -ArgumentList $Executable, $Workspace
+    Start-Job -ScriptBlock { param($path, $root, $query) & $path search $root $query } -ArgumentList $Executable, $Workspace, $Query
 }
 $responses = $jobs | ForEach-Object { Receive-Job -Job $_ -Wait -AutoRemoveJob | ConvertFrom-Json }
 $after = Get-RepositoryState
