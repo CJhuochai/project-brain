@@ -48,7 +48,7 @@ func Serve(input io.Reader, output io.Writer, root string) error {
 func handle(root string, request request) (any, error) {
 	switch request.Method {
 	case "initialize":
-		return map[string]any{"protocolVersion": "2025-03-26", "serverInfo": map[string]string{"name": "project-brain", "version": "v1"}, "capabilities": map[string]any{"tools": map[string]any{}}}, nil
+		return map[string]any{"protocolVersion": "2025-03-26", "serverInfo": map[string]string{"name": "project-brain", "version": "2.0.0"}, "capabilities": map[string]any{"tools": map[string]any{}}}, nil
 	case "tools/list":
 		return map[string]any{"tools": tools()}, nil
 	case "tools/call":
@@ -69,6 +69,9 @@ func handle(root string, request request) (any, error) {
 func tools() []map[string]any {
 	empty := readSchema(map[string]any{})
 	text := readSchema(map[string]any{"text": map[string]string{"type": "string", "description": "需求、业务词、路由或符号"}})
+	graph := readSchema(map[string]any{"text": map[string]string{"type": "string", "description": "符号 ID、全限定名称、带签名的方法或路由"}, "repository": map[string]string{"type": "string", "description": "索引中的仓库完整路径"}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 200}, "max_depth": map[string]any{"type": "integer", "minimum": 1, "maximum": 32}})
+	contextSchema := readSchema(map[string]any{"text": map[string]string{"type": "string"}, "repository": map[string]string{"type": "string"}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 200}, "max_depth": map[string]any{"type": "integer", "minimum": 1, "maximum": 32}, "view": map[string]any{"type": "string", "enum": []string{"summary", "detail"}}})
+	search := readSchema(map[string]any{"text": map[string]string{"type": "string"}, "repository": map[string]string{"type": "string"}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 1000}})
 	changeRange := readSchema(map[string]any{"range": map[string]string{"type": "string", "description": "本地 Git commit 或 base..target"}})
 	inputs := readSchema(map[string]any{"text": map[string]string{"type": "string"}, "paths": map[string]any{"type": "array", "items": map[string]string{"type": "string"}}, "source_ref": map[string]string{"type": "string"}})
 	reportID := readSchema(map[string]any{"id": map[string]string{"type": "string"}})
@@ -76,15 +79,18 @@ func tools() []map[string]any {
 	readOnly := map[string]bool{"readOnlyHint": true}
 	return []map[string]any{
 		{"name": "workspace_status", "description": "读取本地工作区索引状态", "inputSchema": empty, "annotations": readOnly},
-		{"name": "find_business_context", "description": "按关键词查找源码证据", "inputSchema": text, "annotations": readOnly},
-		{"name": "trace_code_path", "description": "追踪下游代码关系", "inputSchema": text, "annotations": readOnly},
-		{"name": "analyze_change_impact", "description": "分析上游影响", "inputSchema": text, "annotations": readOnly},
+		{"name": "find_business_context", "description": "按相关性检索去重源码证据，返回完整性与截断状态", "inputSchema": search, "annotations": readOnly},
+		{"name": "trace_code_path", "description": "按符号身份追踪下游代码关系", "inputSchema": graph, "annotations": readOnly},
+		{"name": "analyze_change_impact", "description": "分析上游影响，保留歧义与解析缺口", "inputSchema": graph, "annotations": readOnly},
+		{"name": "get_symbol_context", "description": "一次读取符号上下游、业务链路、契约、风险与证据；默认精简摘要", "inputSchema": contextSchema, "annotations": readOnly},
+		{"name": "list_contracts", "description": "列出接口契约及跨仓库匹配依据和未决项", "inputSchema": graph, "annotations": readOnly},
+		{"name": "trace_business_flow", "description": "按入口展示业务链路阶段、跨服务调用及证据", "inputSchema": graph, "annotations": readOnly},
 		{"name": "analyze_change", "description": "根据本地 Git 提交或范围定位变更文件及索引证据", "inputSchema": changeRange, "annotations": readOnly},
 		{"name": "analyze_requirement", "description": "收到需求文档、原型或二次开发需求时，先用此工具定位候选项目和业务上下文", "inputSchema": text, "annotations": readOnly},
 		{"name": "analyze_inputs", "description": "解析本地需求文档和交互原型，生成可追溯跨服务分析报告", "inputSchema": inputs, "annotations": readOnly},
 		{"name": "get_analysis_report", "description": "按 ID 读取已保存的本地分析报告", "inputSchema": reportID, "annotations": readOnly},
 		{"name": "record_analysis_feedback", "description": "将人工确认、拒绝或规则反馈回写到本地知识库", "inputSchema": feedback, "annotations": map[string]bool{"readOnlyHint": false}},
-		{"name": "get_evidence", "description": "读取指定关键词的来源证据", "inputSchema": text, "annotations": readOnly},
+		{"name": "get_evidence", "description": "读取指定关键词的排名证据与覆盖状态", "inputSchema": search, "annotations": readOnly},
 	}
 }
 
@@ -95,6 +101,17 @@ func readSchema(properties map[string]any) map[string]any {
 }
 
 func call(root, name string, arguments map[string]any) (any, error) {
+	for _, key := range []string{"freshness", "snapshot_id"} {
+		if value, ok := arguments[key]; ok {
+			text, valid := value.(string)
+			if !valid {
+				return nil, fmt.Errorf("%s must be a string", key)
+			}
+			if key == "freshness" && text != "stable" && text != "latest" {
+				return nil, fmt.Errorf("freshness must be stable or latest")
+			}
+		}
+	}
 	if !knownTool(name) {
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}

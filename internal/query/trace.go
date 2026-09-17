@@ -1,168 +1,199 @@
 package query
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/CJhuochai/project-brain/internal/storage"
+	"strings"
 )
 
 type TraceResult struct {
 	Target     string       `json:"target"`
 	Candidates []Evidence   `json:"candidates,omitempty"`
 	Paths      [][]Evidence `json:"paths,omitempty"`
+	Gaps       []Evidence   `json:"gaps,omitempty"`
+	Coverage   Coverage     `json:"coverage"`
 }
 
 type ImpactResult struct {
-	Target    string     `json:"target"`
-	Relations []Evidence `json:"relations,omitempty"`
+	Target     string     `json:"target"`
+	Candidates []Evidence `json:"candidates,omitempty"`
+	Relations  []Evidence `json:"relations,omitempty"`
+	Gaps       []Evidence `json:"gaps,omitempty"`
+	Coverage   Coverage   `json:"coverage"`
 }
 
 const maxTracePaths = 20
 
 func Trace(db *storage.DB, target string, maxDepth int) (TraceResult, error) {
-	result := TraceResult{Target: target}
-	starts, err := symbols(db, target)
+	g, err := LoadGraph(db)
 	if err != nil {
-		return result, err
+		return TraceResult{}, err
 	}
-	if len(starts) == 0 && strings.HasPrefix(target, "/") {
-		starts, err = sourcesForTarget(db, target)
-		if err != nil {
-			return result, err
-		}
-	}
-	if len(starts) != 1 {
-		result.Candidates = starts
-		return result, nil
-	}
-	paths, err := walk(db, starts[0].Name, maxDepth, false)
-	result.Paths = paths
-	return result, err
+	return g.Trace(target, "", maxDepth, maxTracePaths)
 }
-
-func sourcesForTarget(db *storage.DB, target string) ([]Evidence, error) {
-	rows, err := db.Query(`SELECT repository_id, path, line, source, kind, confidence FROM edges WHERE target = ? ORDER BY source`, target)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var results []Evidence
-	seen := map[string]bool{}
-	for rows.Next() {
-		var item Evidence
-		if err := rows.Scan(&item.Repository, &item.File, &item.Line, &item.Name, &item.Kind, &item.Confidence); err != nil {
-			return nil, err
-		}
-		if !seen[item.Name] {
-			results, seen[item.Name] = append(results, item), true
-		}
-	}
-	return results, rows.Err()
-}
-
 func Impact(db *storage.DB, target string, maxDepth int) (ImpactResult, error) {
-	result := ImpactResult{Target: target}
-	name := target
-	if matches, err := symbols(db, target); err != nil {
-		return result, err
-	} else if len(matches) == 1 {
-		name = matches[0].Name
-	}
-	paths, err := walk(db, name, maxDepth, true)
+	g, err := LoadGraph(db)
 	if err != nil {
-		return result, err
+		return ImpactResult{}, err
 	}
-	for _, path := range paths {
-		result.Relations = append(result.Relations, path...)
-	}
-	return result, nil
+	return g.Impact(target, "", maxDepth, maxTracePaths)
 }
 
-func symbols(db *storage.DB, target string) ([]Evidence, error) {
-	rows, err := db.Query(`SELECT repository_id, path, line, name, kind, 'certain' FROM symbols WHERE name = ? OR name LIKE ? ORDER BY name`, target, "%."+target)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var results []Evidence
-	for rows.Next() {
-		var item Evidence
-		if err := rows.Scan(&item.Repository, &item.File, &item.Line, &item.Name, &item.Kind, &item.Confidence); err != nil {
-			return nil, err
+func (g *Graph) starts(target, repo string) []Evidence {
+	starts := g.Resolve(target, repo)
+	if len(starts) == 0 && strings.HasPrefix(target, "/") {
+		seen := map[string]bool{}
+		for id, edges := range g.out {
+			for _, e := range edges {
+				if e.Kind == "route" && e.Target == target && (repo == "" || repo == e.Repository) && !seen[id] {
+					seen[id] = true
+					starts = append(starts, g.byID[id])
+				}
+			}
 		}
-		results = append(results, item)
+		sortEvidence(starts)
 	}
-	return results, rows.Err()
+	return starts
 }
 
-func walk(db *storage.DB, start string, maxDepth int, reverse bool) ([][]Evidence, error) {
-	if maxDepth < 1 {
-		return nil, fmt.Errorf("maxDepth must be positive")
+func (g *Graph) Trace(target, repo string, depth, limit int) (TraceResult, error) {
+	r := TraceResult{Target: target, Coverage: Coverage{Complete: true, Limit: limit}}
+	if err := validateGraphOptions(depth, limit); err != nil {
+		return r, err
 	}
+	starts := g.starts(target, repo)
+	if len(starts) != 1 {
+		r.Candidates = starts
+		if len(starts) > 1 {
+			r.Coverage.Gap("ambiguous_start", false)
+		} else {
+			r.Coverage.Gap("symbol_not_found", false)
+		}
+		return r, nil
+	}
+	r.Paths, r.Gaps, r.Coverage = g.walk(starts[0], depth, limit, false)
+	return r, nil
+}
+
+func (g *Graph) Impact(target, repo string, depth, limit int) (ImpactResult, error) {
+	r := ImpactResult{Target: target, Coverage: Coverage{Complete: true, Limit: limit}}
+	if err := validateGraphOptions(depth, limit); err != nil {
+		return r, err
+	}
+	starts := g.starts(target, repo)
+	if len(starts) != 1 {
+		r.Candidates = starts
+		if len(starts) > 1 {
+			r.Coverage.Gap("ambiguous_start", false)
+		} else {
+			r.Coverage.Gap("symbol_not_found", false)
+		}
+		return r, nil
+	}
+	paths, gaps, coverage := g.walk(starts[0], depth, limit, true)
+	for _, p := range paths {
+		r.Relations = append(r.Relations, p...)
+	}
+	r.Relations = dedupEvidence(r.Relations)
+	r.Gaps = gaps
+	r.Coverage = coverage
+	r.Coverage.Returned = len(r.Relations)
+	for _, edges := range g.out {
+		for _, e := range edges {
+			if e.TargetID == "" && (e.Reason == "ambiguous_target" || e.Reason == "unresolved_target") && (e.Target == starts[0].Name || e.Repository == starts[0].Repository && e.Target == shortName(starts[0].Name)) {
+				r.Gaps = append(r.Gaps, e.Evidence)
+				r.Coverage.Unresolved++
+				r.Coverage.Gap("unresolved_incoming", false)
+			}
+		}
+	}
+	r.Gaps = dedupEvidence(r.Gaps)
+	return r, nil
+}
+
+func (g *Graph) walk(start Evidence, maxDepth, limit int, reverse bool) ([][]Evidence, []Evidence, Coverage) {
 	var paths [][]Evidence
-	var visit func(string, int, []Evidence) error
-	visit = func(current string, depth int, path []Evidence) error {
-		if len(paths) == maxTracePaths {
-			return nil
+	var gaps []Evidence
+	c := Coverage{Complete: true, Limit: limit}
+	diagnosed := map[string]bool{}
+	gapSeen := map[string]bool{}
+	addGap := func(e Evidence) {
+		k := evidenceKey(e)
+		if !gapSeen[k] {
+			gapSeen[k] = true
+			gaps = append(gaps, e)
+			c.Unresolved++
+			c.Gap(e.Reason, false)
 		}
-		if depth == maxDepth {
-			if len(path) > 0 {
-				paths = append(paths, path)
+	}
+	var visit func(Evidence, int, []Evidence, map[string]bool)
+	appendPath := func(p []Evidence) {
+		if len(p) == 0 {
+			return
+		}
+		if len(paths) >= limit {
+			c.Gap("path_limit", true)
+			return
+		}
+		paths = append(paths, append([]Evidence(nil), p...))
+	}
+	visit = func(current Evidence, depth int, path []Evidence, seen map[string]bool) {
+		for _, link := range g.Links {
+			if link.Consumer.SymbolID == current.ID && link.Status != "matched" {
+				addGap(Evidence{Repository: current.Repository, File: link.Consumer.File, Line: link.Consumer.Line, Name: link.Consumer.Key, Kind: "contract_" + link.Consumer.Kind, Reason: link.Reason, Confidence: "unresolved"})
 			}
-			return nil
 		}
-		edges, err := linkedEdges(db, current, reverse)
-		if err != nil {
-			return err
+		key := current.Repository + "\x00" + current.File
+		if !diagnosed[key] {
+			diagnosed[key] = true
+			for _, d := range g.diagnostics[key] {
+				gaps = append(gaps, d)
+				c.Diagnostics++
+				c.Gap("parser_diagnostics", false)
+			}
 		}
-		if len(edges) == 0 && len(path) > 0 {
-			paths = append(paths, path)
+		edges := g.out[current.ID]
+		if reverse {
+			edges = g.in[current.ID]
 		}
-		for _, edge := range edges {
-			next := edge.Target
+		if len(edges) == 0 {
+			appendPath(path)
+			return
+		}
+		if depth >= maxDepth {
+			c.Gap("depth_limit", true)
+			appendPath(path)
+			return
+		}
+		for _, e := range edges {
+			if len(paths) >= limit {
+				c.Gap("path_limit", true)
+				return
+			}
+			nextID := e.TargetID
 			if reverse {
-				next = edge.Source
-			} else if matches, err := symbols(db, next); err != nil {
-				return err
-			} else if len(matches) == 1 {
-				next = matches[0].Name
+				nextID = e.SourceID
 			}
-			if seen(path, next) {
+			nextPath := append(append([]Evidence(nil), path...), e.Evidence)
+			if nextID == "" {
+				if e.Reason != "terminal_evidence" {
+					addGap(e.Evidence)
+				}
+				appendPath(nextPath)
 				continue
 			}
-			if err := visit(next, depth+1, append(path, edge)); err != nil {
-				return err
+			if seen[nextID] {
+				c.Gap("cycle_detected", false)
+				appendPath(nextPath)
+				continue
 			}
+			seen[nextID] = true
+			visit(g.byID[nextID], depth+1, nextPath, seen)
+			delete(seen, nextID)
 		}
-		return nil
 	}
-	if err := visit(start, 0, nil); err != nil {
-		return nil, err
-	}
-	return paths, nil
-}
-
-func linkedEdges(db *storage.DB, current string, reverse bool) ([]Evidence, error) {
-	column, value := "source", current
-	if reverse {
-		column, value = "target", shortName(current)
-	}
-	rows, err := db.Query(`SELECT repository_id, path, line, source, target, kind, confidence FROM edges WHERE `+column+` = ? ORDER BY repository_id, path, line`, value)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var results []Evidence
-	for rows.Next() {
-		var item Evidence
-		if err := rows.Scan(&item.Repository, &item.File, &item.Line, &item.Source, &item.Target, &item.Kind, &item.Confidence); err != nil {
-			return nil, err
-		}
-		item.Name = item.Target
-		results = append(results, item)
-	}
-	return results, rows.Err()
+	visit(start, 0, nil, map[string]bool{start.ID: true})
+	c.Returned = len(paths)
+	return paths, dedupEvidence(gaps), c
 }
 
 func shortName(name string) string {
@@ -170,13 +201,4 @@ func shortName(name string) string {
 		return name[index+1:]
 	}
 	return name
-}
-
-func seen(path []Evidence, name string) bool {
-	for _, item := range path {
-		if item.Source == name || item.Target == name {
-			return true
-		}
-	}
-	return false
 }
