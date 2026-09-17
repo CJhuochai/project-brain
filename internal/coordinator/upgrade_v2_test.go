@@ -5,8 +5,29 @@ import (
 	"database/sql"
 	"github.com/CJhuochai/project-brain/internal/storage"
 	"os"
+	"strings"
 	"testing"
 )
+
+func TestUpgradeRejectsLiveOldCoordinatorButAllowsRestart(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	server, err := Start(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	if _, err := server.control.Exec(`UPDATE coordinator_state SET protocol=1 WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Ensure(root, "missing-pb-v2-executable"); err == nil || !strings.Contains(err.Error(), "unsupported coordinator protocol") {
+		t.Fatalf("live old=%v", err)
+	}
+	server.Close()
+	if _, err := Ensure(root, "missing-pb-v2-executable"); err == nil || strings.Contains(err.Error(), "unsupported coordinator protocol") {
+		t.Fatalf("stopped old cannot restart: %v", err)
+	}
+}
 
 // Genuine v1 shape, unchanged Git baseline: schema change alone must refresh.
 func TestV2UpgradeStagesReindexAndPreservesReport(t *testing.T) {
