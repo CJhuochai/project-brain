@@ -7,7 +7,7 @@
 - 新增相关性检索与全局去重排序、稳定作用域符号、完整性与解析缺口、分阶段业务链路、保守跨服务契约、摘要/详情符号上下文。
 - 新增 MCP `get_symbol_context`、`list_contracts`、`trace_business_flow` 及 CLI `context`、`contracts`、`flow`。
 - 搜索返回格式改为 `{ evidence, coverage }`；协调者协议 2、索引 schema 9。首次查询自动重建索引，保留旧快照、报告和反馈。
-- Codex 插件 0.2.0 优先使用摘要上下文，并披露查询截断与未解析关系。
+- Codex 插件 2.0.0 与 PB 发布版本统一，作者为 CJ，主页链接指向 PB GitHub 仓库；优先使用摘要上下文，并披露查询截断与未解析关系。
 - 迁移、能力边界与验证见 [发布说明](docs/releases/v2.0.0.md)。
 
 ## [1.2.2] - 2026-09-14
