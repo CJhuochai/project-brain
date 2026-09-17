@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/CJhuochai/project-brain/internal/query"
 	"github.com/CJhuochai/project-brain/internal/storage"
 )
 
@@ -39,8 +40,8 @@ func TestExecuteSearchUsesSelectedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	items, ok := result.([]Evidence)
-	if !ok || len(items) != 1 || items[0].File != "Main.java" {
+	search, ok := result.(query.SearchResult)
+	if !ok || len(search.Evidence) != 1 || search.Evidence[0].File != "Main.java" || !search.Coverage.Complete {
 		t.Fatalf("result=%#v", result)
 	}
 }

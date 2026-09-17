@@ -2,7 +2,7 @@ package coordinator
 
 import "encoding/json"
 
-const protocolVersion = 1
+const protocolVersion = 2
 
 type Request struct {
 	Token      string         `json:"token"`

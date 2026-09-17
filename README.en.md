@@ -14,6 +14,8 @@ English | [简体中文](README.md)
 
 ## Architecture
 
+v2.0 adds ranked exact/full-text search, stable symbol IDs, query coverage, staged business flows, conservative HTTP/Dubbo/MQ contracts, and summary/detail context. Read the [migration notes](docs/releases/v2.0.0.md) before upgrading: search responses, index schema and coordinator protocol have changed.
+
 ![Project Brain architecture](assets/project-brain-architecture-en.svg)
 
 From the Agent/CLI entry point through the local coordinator, immutable index snapshots, and analysis reports, all data stays on the user's machine. Business repositories are scanned read-only; concurrent sessions read one complete snapshot until a refresh is atomically activated.

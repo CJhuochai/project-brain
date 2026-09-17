@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	"github.com/CJhuochai/project-brain/internal/coordinator"
 	"github.com/CJhuochai/project-brain/internal/workspace"
@@ -56,12 +57,48 @@ func command(args []string) (string, map[string]any, string, error) {
 	switch args[0] {
 	case "index", "refresh", "status":
 		return "workspace_status", map[string]any{}, "latest", nil
-	case "search", "trace", "impact":
-		if len(args) != 3 {
+	case "search", "trace", "impact", "context", "contracts", "flow":
+		if len(args) < 3 {
 			return "", nil, "", usage()
 		}
-		operations := map[string]string{"search": "find_business_context", "trace": "trace_code_path", "impact": "analyze_change_impact"}
-		return operations[args[0]], map[string]any{"text": args[2]}, "stable", nil
+		operations := map[string]string{"search": "find_business_context", "trace": "trace_code_path", "impact": "analyze_change_impact", "context": "get_symbol_context", "contracts": "list_contracts", "flow": "trace_business_flow"}
+		arguments := map[string]any{"text": args[2]}
+		freshness := "stable"
+		for i := 3; i < len(args); i++ {
+			flag := args[i]
+			if flag == "--detail" {
+				if args[0] != "context" {
+					return "", nil, "", fmt.Errorf("--detail is only valid for context")
+				}
+				arguments["view"] = "detail"
+				continue
+			}
+			if flag == "--latest" {
+				freshness = "latest"
+				continue
+			}
+			if i+1 >= len(args) {
+				return "", nil, "", usage()
+			}
+			i++
+			switch flag {
+			case "--repository":
+				arguments["repository"] = args[i]
+			case "--limit", "--max-depth":
+				n, err := strconv.Atoi(args[i])
+				if err != nil {
+					return "", nil, "", fmt.Errorf("%s must be an integer", flag)
+				}
+				key := "limit"
+				if flag == "--max-depth" {
+					key = "max_depth"
+				}
+				arguments[key] = n
+			default:
+				return "", nil, "", fmt.Errorf("unknown option: %s", flag)
+			}
+		}
+		return operations[args[0]], arguments, freshness, nil
 	case "analyze":
 		if len(args) < 3 {
 			return "", nil, "", usage()
@@ -87,5 +124,5 @@ func command(args []string) (string, map[string]any, string, error) {
 }
 
 func usage() error {
-	return fmt.Errorf("usage: project-brain <discover|index|refresh|status> <workspace>; project-brain <search|trace|impact|report> <workspace> <target>; project-brain analyze <workspace> <local-input...>; project-brain feedback <workspace> <report-id> <kind> <key> <decision> <note>")
+	return fmt.Errorf("usage: project-brain <discover|index|refresh|status> <workspace>; project-brain <search|trace|impact|context|contracts|flow> <workspace> <target> [--repository <indexed-path>] [--limit <n>] [--max-depth <n>] [--latest] [--detail (context only)]; project-brain report <workspace> <id>; project-brain analyze <workspace> <local-input...>; project-brain feedback <workspace> <report-id> <kind> <key> <decision> <note>")
 }
