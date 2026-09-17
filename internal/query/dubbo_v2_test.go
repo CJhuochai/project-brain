@@ -23,6 +23,7 @@ func TestDubboCallBridgesLocalInterfaceStub(t *testing.T) {
 	for _, c := range []struct{ repo, file, source string }{
 		{"client", "Client.java", "package p;\nimport api.OrderApi;\nclass Client {\n @DubboReference\n private OrderApi api;\n void run() { api.submit(); }\n}"},
 		{"client", "OrderApi.java", "package api;\ninterface OrderApi {\n void submit();\n}"},
+		{"client", "Local.java", "package p;\nimport api.OrderApi;\nclass Local {\n private OrderApi api;\n void run() { api.submit(); }\n}"},
 		{"server", "Provider.java", "package p;\nimport api.OrderApi;\n@DubboService\nclass Provider implements OrderApi {\n void submit() {}\n}"},
 	} {
 		v2Put(t, db, c.repo, c.file, extract.File(c.file, []byte(c.source)))
@@ -45,5 +46,16 @@ func TestDubboCallBridgesLocalInterfaceStub(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("RPC stub blocked provider: %#v links=%#v", r, g.Links)
+	}
+	local, err := g.Trace("p.Local.run", "client", 6, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range local.Paths {
+		for _, e := range path {
+			if e.TargetRepository == "server" {
+				t.Fatalf("unannotated class inherited RPC contract: %#v", local)
+			}
+		}
 	}
 }
