@@ -32,6 +32,9 @@ func (db *DB) DeleteFilesNotInTx(transaction *sql.Tx, repositoryID string, paths
 		return err
 	}
 	for _, item := range stale {
+		if _, err := transaction.Exec(`DELETE FROM contracts WHERE repository_id = ? AND path = ?`, repositoryID, item.path); err != nil {
+			return err
+		}
 		if _, err := transaction.Exec(`DELETE FROM file_fts WHERE rowid = ?`, item.id); err != nil {
 			return err
 		}

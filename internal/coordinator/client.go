@@ -23,6 +23,9 @@ type Client struct {
 // Ensure returns the one healthy local coordinator for root. The first caller
 // atomically leases startup; every other caller only waits for that process.
 func Ensure(root, executable string) (*Client, error) {
+	if _, err := Connect(root); err != nil && strings.Contains(err.Error(), "unsupported coordinator protocol") {
+		return nil, fmt.Errorf("%w; stop the previous Project Brain coordinator and restart your MCP client after upgrading", err)
+	}
 	if client, err := healthyClient(root); err == nil {
 		return client, nil
 	}
@@ -125,7 +128,7 @@ func (client *Client) Call(ctx context.Context, request Request) (Response, erro
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = connection.SetDeadline(deadline)
 	} else {
-		_ = connection.SetDeadline(time.Now().Add(30 * time.Second))
+		_ = connection.SetDeadline(time.Now().Add(45 * time.Second))
 	}
 	if err := json.NewEncoder(connection).Encode(request); err != nil {
 		return Response{}, err

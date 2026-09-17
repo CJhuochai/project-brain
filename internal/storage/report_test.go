@@ -27,13 +27,17 @@ func TestReportsAndFeedbackPersistLocally(t *testing.T) {
 	}
 }
 
-func TestSchemaEightKeepsVersionSevenIndex(t *testing.T) {
+func TestSchemaNineKeepsVersionSevenFilesAndReports(t *testing.T) {
 	directory := t.TempDir()
 	db, err := Open(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO files(repository_id, path, content_hash, content) VALUES('repo', 'Entry.java', 'hash', 'evidence'); PRAGMA user_version = 7`); err != nil {
+	if _, err := db.Exec(`INSERT INTO files(repository_id, path, content_hash, content) VALUES('repo', 'Entry.java', 'hash', 'evidence');
+DROP TABLE contracts; DROP INDEX symbols_uid; DROP INDEX symbols_repo_name;
+ALTER TABLE symbols DROP COLUMN uid; ALTER TABLE symbols DROP COLUMN signature; ALTER TABLE symbols DROP COLUMN end_line;
+ALTER TABLE edges DROP COLUMN source_signature; ALTER TABLE edges DROP COLUMN target_arity;
+PRAGMA user_version = 7`); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -48,7 +52,7 @@ func TestSchemaEightKeepsVersionSevenIndex(t *testing.T) {
 	if err := db.QueryRow(`SELECT count(*) FROM files`).Scan(&files); err != nil || files != 1 {
 		t.Fatalf("files=%d err=%v", files, err)
 	}
-	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != 8 {
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != SchemaVersion {
 		t.Fatalf("version=%d err=%v", version, err)
 	}
 }

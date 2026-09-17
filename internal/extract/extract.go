@@ -57,7 +57,7 @@ func extractMaven(content []byte) Result {
 	return result
 }
 
-func extractJava(content []byte) Result {
+func extractJavaLegacy(content []byte) Result {
 	text, masked := string(content), maskJava(string(content))
 	typeMatch := typePattern.FindStringSubmatchIndex(masked)
 	if typeMatch == nil {
@@ -197,11 +197,24 @@ func javaFields(text string, imports map[string]string, packageName string, base
 }
 
 func qualifyJavaType(name string, imports map[string]string, packageName string) string {
-	name = strings.TrimSpace(strings.Split(name, "<")[0])
-	if qualified, found := imports[name]; found {
-		return qualified
+	name = strings.TrimSpace(name)
+	base, suffix := name, ""
+	if index := strings.Index(base, "<"); index >= 0 {
+		base = base[:index]
 	}
-	return qualify(packageName, name)
+	if strings.HasSuffix(base, "[]") {
+		base, suffix = strings.TrimSuffix(base, "[]"), "[]"
+	}
+	if qualified, found := imports[base]; found {
+		return qualified + suffix
+	}
+	switch base {
+	case "byte", "short", "int", "long", "float", "double", "boolean", "char", "void":
+		return base + suffix
+	case "String", "Object", "Integer", "Long", "Boolean", "Double", "Float", "Short", "Byte", "Character", "Void":
+		return "java.lang." + base + suffix
+	}
+	return qualify(packageName, base) + suffix
 }
 
 func qualify(packageName, name string) string {

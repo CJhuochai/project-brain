@@ -1,6 +1,6 @@
 {
   "name": "project-brain-codex",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "让 Codex 在需求分析前优先使用本地 Project Brain 知识库。",
   "author": { "name": "CJhuochai" },
   "skills": "./skills/",

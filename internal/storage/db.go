@@ -14,6 +14,8 @@ type DB struct {
 	*sql.DB
 }
 
+const SchemaVersion = 9
+
 func Open(workspaceDir string) (*DB, error) {
 	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		return nil, err
@@ -65,8 +67,11 @@ func (db *DB) initialize() error {
 	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		return err
 	}
+	if version > SchemaVersion {
+		return fmt.Errorf("index schema %d is newer than supported %d", version, SchemaVersion)
+	}
 	if version < 7 {
-		if _, err := db.Exec(`DROP TABLE IF EXISTS diagnostics; DROP TABLE IF EXISTS repositories; DROP TABLE IF EXISTS edges; DROP TABLE IF EXISTS symbols; DROP TABLE IF EXISTS file_fts; DROP TABLE IF EXISTS files;`); err != nil {
+		if _, err := db.Exec(`DROP TABLE IF EXISTS contracts; DROP TABLE IF EXISTS diagnostics; DROP TABLE IF EXISTS repositories; DROP TABLE IF EXISTS edges; DROP TABLE IF EXISTS symbols; DROP TABLE IF EXISTS file_fts; DROP TABLE IF EXISTS files;`); err != nil {
 			return err
 		}
 	}
@@ -145,6 +150,32 @@ PRAGMA user_version = 8;
 `); err != nil {
 			return err
 		}
+	}
+	if version < SchemaVersion {
+		tx, err := db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		for _, statement := range []string{
+			`ALTER TABLE symbols ADD COLUMN uid TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE symbols ADD COLUMN signature TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE symbols ADD COLUMN end_line INTEGER NOT NULL DEFAULT 0`,
+			`ALTER TABLE edges ADD COLUMN source_signature TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE edges ADD COLUMN target_arity INTEGER`,
+			`CREATE INDEX symbols_uid ON symbols(uid)`,
+			`CREATE INDEX symbols_repo_name ON symbols(repository_id, name)`,
+			`CREATE TABLE contracts (id INTEGER PRIMARY KEY, repository_id TEXT NOT NULL, path TEXT NOT NULL, kind TEXT NOT NULL, role TEXT NOT NULL, service TEXT NOT NULL, contract_key TEXT NOT NULL, symbol TEXT NOT NULL, signature TEXT NOT NULL, line INTEGER NOT NULL, confidence TEXT NOT NULL, reason TEXT NOT NULL, broker TEXT NOT NULL)`,
+			`CREATE INDEX contracts_key ON contracts(kind, contract_key, role)`,
+			`UPDATE files SET content_hash = ''`,
+			`DELETE FROM repositories`,
+			`PRAGMA user_version = 9`,
+		} {
+			if _, err := tx.Exec(statement); err != nil {
+				return err
+			}
+		}
+		return tx.Commit()
 	}
 	return nil
 }
