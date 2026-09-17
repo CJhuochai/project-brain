@@ -10,10 +10,11 @@ $repositories = @((& $Executable discover $Workspace) | ConvertFrom-Json)
 if ($LASTEXITCODE -ne 0) { throw "discover failed" }
 function RepositoryState {
     @($repositories | ForEach-Object {
-        [pscustomobject]@{ path = $_.path; status = @(& git -C $_.path status --porcelain); refs = @(& git -C $_.path for-each-ref --format='%(refname):%(objectname)') }
+        [pscustomobject]@{ path = $_.path; status = @(& git --no-optional-locks -C $_.path status --porcelain); refs = @(& git --no-optional-locks -C $_.path for-each-ref --format='%(refname):%(objectname)') }
     }) | ConvertTo-Json -Depth 5 -Compress
 }
 $before = RepositoryState
+$before | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "business-state.before.json")
 $timer = [Diagnostics.Stopwatch]::StartNew()
 $status = $null
 for ($attempt = 0; $attempt -lt 60; $attempt++) {
@@ -40,6 +41,14 @@ foreach ($operation in @("context", "flow", "impact")) {
     if ($LASTEXITCODE -ne 0) { throw "$operation failed" }
     $response | ConvertTo-Json -Depth 25 | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "$operation.json")
 }
+$detail = (& $Executable context $Workspace $symbol.id --repository $symbol.repository --limit 10 --detail) | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or $detail.symbol.id -ne $symbol.id) { throw "Detail expansion failed" }
+$detail | ConvertTo-Json -Depth 25 | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "context.detail.json")
+$method = @((Get-Content -Raw (Join-Path $OutputDirectory "groupSubmit.search.json") | ConvertFrom-Json).evidence | Where-Object {$_.id -and $_.kind -like '*_method'})[0]
+if (!$method) { throw "No method identity found" }
+$methodFlow = (& $Executable flow $Workspace $method.id --repository $method.repository --limit 10) | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or !$methodFlow.flows) { throw "Method flow failed" }
+$methodFlow | ConvertTo-Json -Depth 25 | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "method-flow.json")
 $contracts = (& $Executable contracts $Workspace "" --limit 100) | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw "contracts failed" }
 $contracts | ConvertTo-Json -Depth 20 | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "contracts.json")
@@ -55,6 +64,7 @@ $mcp | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "mcp.jsonl")
 $requirement = ($mcp[-1] | ConvertFrom-Json).result.content[0].text | ConvertFrom-Json
 if (!$requirement.evidence) { throw "requirement returned no evidence" }
 $after = RepositoryState
+$after | Set-Content -Encoding utf8 (Join-Path $OutputDirectory "business-state.after.json")
 if ($before -ne $after) { throw "Business repository status or refs changed" }
 [pscustomobject]@{
     repositories = $repositories.Count
@@ -68,4 +78,7 @@ if ($before -ne $after) { throw "Business repository status or refs changed" }
     requirement_first_repository = @($requirement.repositories)[0]
     requirement_coverage = $requirement.coverage
     business_repository_state_unchanged = $true
+    context_summary_bytes = (Get-Item (Join-Path $OutputDirectory "context.json")).Length
+    context_detail_bytes = (Get-Item (Join-Path $OutputDirectory "context.detail.json")).Length
+    method_flow_coverage = $methodFlow.coverage
 } | ConvertTo-Json -Depth 12 | Tee-Object -FilePath (Join-Path $OutputDirectory "summary.json")

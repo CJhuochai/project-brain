@@ -145,7 +145,7 @@ func (g *Graph) loadContracts(db *storage.DB) error {
 			}
 			var targets []Evidence
 			for _, link := range g.Links {
-				if link.Status != "matched" || link.Consumer.Kind != "dubbo" || link.Consumer.Repository != e.Repository || !strings.HasPrefix(e.Target, link.Consumer.Key+".") {
+				if link.Status != "matched" || link.Consumer.Kind != "dubbo" || link.Consumer.Repository != e.Repository || !strings.HasPrefix(e.Source, link.Consumer.Symbol+".") || !strings.HasPrefix(e.Target, link.Consumer.Key+".") {
 					continue
 				}
 				p := link.Providers[0]
@@ -272,7 +272,7 @@ func (g *Graph) ContractReport(repo, filter string, limit int) (ContractResult, 
 			if repo != "" && d.Repository != repo {
 				continue
 			}
-			if filter != "" && !files[key] && !strings.Contains(strings.ToLower(d.Name), strings.ToLower(filter)) {
+			if filter != "" && !files[key] && !strings.Contains(strings.ToLower(d.Reason), strings.ToLower(filter)) {
 				continue
 			}
 			r.Coverage.Diagnostics++
