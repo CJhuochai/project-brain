@@ -14,6 +14,8 @@
 
 ## 整体架构
 
+v2.0 提供精确/全文排序检索、稳定符号 ID、查询完整性、业务链路、HTTP/Dubbo/MQ 契约和摘要/详情上下文。升级前阅读 [迁移说明](docs/releases/v2.0.0.md)：搜索返回格式、索引 schema 和协调者协议均有变化。
+
 ![Project Brain 整体架构](assets/project-brain-architecture-zh.svg)
 
 从 Agent/CLI 入口到本机协调者、不可变索引快照和分析报告，所有数据均停留在用户电脑；业务仓库仅被只读扫描。并发会话读取同一份完整快照，刷新完成后再原子切换。
@@ -52,9 +54,14 @@ bin\project-brain.exe status E:\ExampleWorkspace
 bin\project-brain.exe search E:\ExampleWorkspace groupSubmit
 bin\project-brain.exe trace E:\ExampleWorkspace com.example.EntryController
 bin\project-brain.exe impact E:\ExampleWorkspace com.example.EntryService
+bin\project-brain.exe context E:\ExampleWorkspace com.example.EntryController --repository E:\ExampleWorkspace\example --limit 10
+bin\project-brain.exe flow E:\ExampleWorkspace com.example.EntryController --max-depth 8
+bin\project-brain.exe contracts E:\ExampleWorkspace orders --limit 100
 ```
 
 所有命令默认输出 JSON。`trace` 只在目标符号唯一时向下遍历；同名符号会返回候选而不会猜测。`impact` 会保留 `certain` 与 `probable` 置信度。
+
+`search` 返回 `{ evidence, coverage }`。`context` 默认摘要，添加 `--detail` 展开；可以用检索返回的符号 `id` 精确查询。检查 `coverage` 和 `gaps`，不要将截断或动态关系缺口当作没有影响。`complete` 描述索引静态证据的查询完整性，不能证明运行时可达。
 
 ## 接入 Codex MCP
 

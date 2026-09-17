@@ -149,6 +149,21 @@ func (server *Server) execute(request Request) Response {
 		}
 		return Response{Result: json.RawMessage(`{"ok":true}`), Meta: server.metadata(active, "up_to_date", "")}
 	}
+	if request.Freshness != "" && request.Freshness != "stable" && request.Freshness != "latest" {
+		return Response{Error: "freshness must be stable or latest"}
+	}
+	if request.Operation == "get_analysis_report" || request.Operation == "record_analysis_feedback" {
+		active, err := server.control.ActiveSnapshot()
+		if err != nil {
+			return Response{Error: err.Error()}
+		}
+		if request.Operation == "record_analysis_feedback" {
+			server.feedbackMu.Lock()
+			defer server.feedbackMu.Unlock()
+		}
+		result, err := service.Execute(server.root, nil, server.control, request.Operation, request.Arguments, report.Provenance{})
+		return server.result(result, server.metadata(active, "up_to_date", ""), err)
+	}
 	snapshot, meta, err := server.chooseSnapshot(request)
 	if err != nil {
 		return Response{Error: err.Error()}
@@ -174,14 +189,6 @@ func (server *Server) execute(request Request) Response {
 			return Response{Meta: meta, Error: err.Error()}
 		}
 		return Response{Result: encoded, Meta: meta}
-	}
-	if request.Operation == "get_analysis_report" || request.Operation == "record_analysis_feedback" {
-		if request.Operation == "record_analysis_feedback" {
-			server.feedbackMu.Lock()
-			defer server.feedbackMu.Unlock()
-		}
-		result, err := service.Execute(server.root, nil, server.control, request.Operation, request.Arguments, report.Provenance{})
-		return server.result(result, meta, err)
 	}
 	index, err := storage.OpenSnapshot(snapshot.Path, false)
 	if err != nil {
@@ -209,6 +216,11 @@ func (server *Server) chooseSnapshot(request Request) (storage.Snapshot, Metadat
 		if err != nil {
 			return storage.Snapshot{}, Metadata{}, fmt.Errorf("snapshot not available: %s", request.SnapshotID)
 		}
+		if upgrade, err := snapshotNeedsUpgrade(snapshot.Path); err != nil {
+			return storage.Snapshot{}, Metadata{}, err
+		} else if upgrade && request.Operation != "get_analysis_report" && request.Operation != "record_analysis_feedback" {
+			return storage.Snapshot{}, Metadata{}, fmt.Errorf("snapshot %s uses the v1 schema; omit snapshot_id to upgrade; saved reports remain readable", request.SnapshotID)
+		}
 		return snapshot, server.metadata(snapshot, "up_to_date", ""), nil
 	}
 	active, err := server.control.ActiveSnapshot()
@@ -223,18 +235,28 @@ func (server *Server) chooseSnapshot(request Request) (storage.Snapshot, Metadat
 		return active, server.metadata(active, "up_to_date", ""), err
 	}
 	done := server.refresh(target)
-	if request.Freshness != "latest" {
+	needsUpgrade, upgradeErr := snapshotNeedsUpgrade(active.Path)
+	if upgradeErr != nil {
+		return storage.Snapshot{}, Metadata{}, upgradeErr
+	}
+	if request.Freshness != "latest" && !needsUpgrade {
 		return active, server.metadata(active, "refreshing", target), nil
 	}
 	select {
 	case <-done:
 	case <-time.After(30 * time.Second):
+		if needsUpgrade {
+			return storage.Snapshot{}, server.metadata(active, "stale", target), fmt.Errorf("v2 index upgrade is still running; retry after refresh")
+		}
 		return active, server.metadata(active, "stale", target), nil
 	}
 	server.refreshMu.Lock()
 	err = server.refreshError
 	server.refreshMu.Unlock()
 	if err != nil {
+		if needsUpgrade {
+			return storage.Snapshot{}, server.metadata(active, "stale", target), fmt.Errorf("v2 index upgrade failed; old snapshot retained: %w", err)
+		}
 		return active, server.metadata(active, "stale", target), nil
 	}
 	active, err = server.control.ActiveSnapshot()
@@ -253,6 +275,11 @@ func (server *Server) metadata(snapshot storage.Snapshot, freshness, target stri
 }
 
 func (server *Server) baselineChanged(active storage.Snapshot) (bool, string, error) {
+	if upgrade, err := snapshotNeedsUpgrade(active.Path); err != nil {
+		return false, "", err
+	} else if upgrade {
+		return true, "schema-upgrade-v2", nil
+	}
 	index, err := storage.OpenSnapshot(active.Path, false)
 	if err != nil {
 		return false, "", fmt.Errorf("open active snapshot: %w", err)
@@ -276,6 +303,20 @@ func (server *Server) baselineChanged(active storage.Snapshot) (bool, string, er
 		}
 	}
 	return len(targets) > 0, strings.Join(targets, ","), nil
+}
+
+func snapshotNeedsUpgrade(path string) (bool, error) {
+	index, err := storage.OpenSnapshot(path, false)
+	if err != nil {
+		return false, err
+	}
+	defer index.Close()
+	var version int
+	err = index.QueryRow(`PRAGMA user_version`).Scan(&version)
+	if err == nil && version > storage.SchemaVersion {
+		return false, fmt.Errorf("snapshot schema %d is newer than this binary supports (%d)", version, storage.SchemaVersion)
+	}
+	return version < storage.SchemaVersion, err
 }
 
 func (server *Server) refresh(target string) <-chan struct{} {

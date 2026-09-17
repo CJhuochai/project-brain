@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/CJhuochai/project-brain/internal/service"
+	"github.com/CJhuochai/project-brain/internal/query"
 	"github.com/CJhuochai/project-brain/internal/storage"
 )
 
@@ -106,8 +106,8 @@ func TestLatestRequestsCoalesceToOneRefreshedSnapshot(t *testing.T) {
 			if response.Meta.SnapshotID != snapshot {
 				t.Fatalf("response used a second snapshot: %#v", response)
 			}
-			var items []service.Evidence
-			if err := json.Unmarshal(response.Result, &items); err != nil || len(items) == 0 {
+			var items query.SearchResult
+			if err := json.Unmarshal(response.Result, &items); err != nil || len(items.Evidence) == 0 {
 				t.Fatalf("items=%#v err=%v", items, err)
 			}
 		}

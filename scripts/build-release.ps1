@@ -20,6 +20,7 @@ try {
         $env:GOOS = $target.GOOS
         $env:GOARCH = $target.GOARCH
         go build -trimpath -ldflags "-s -w -X main.version=$Version" -o $binary .\cmd\project-brain
+        if ($LASTEXITCODE -ne 0) { throw "Build failed: $($target.GOOS)/$($target.GOARCH)" }
         Get-FileHash -Algorithm SHA256 $binary | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($binary))" } | Set-Content -Encoding utf8 ("$binary.sha256")
     }
 } finally {
