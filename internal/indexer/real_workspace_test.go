@@ -35,7 +35,7 @@ func TestRealWorkspaceIncrementalRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`DELETE FROM repositories WHERE repository_id = ?`, filepath.Join(root, "basis-dependencies-bom")); err != nil {
+	if _, err := db.Exec(`DELETE FROM repositories WHERE repository_id = (SELECT repository_id FROM repositories ORDER BY repository_id LIMIT 1)`); err != nil {
 		t.Fatal(err)
 	}
 	result, err := Refresh(root, db)

@@ -6,3 +6,13 @@
 *.sqlite-wal
 /tmp/
 .worktrees/
+
+.playwright-cli/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+/acceptance-output/

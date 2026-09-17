@@ -51,5 +51,5 @@ MCP 提供 `analyze_requirement` 与 `analyze_change`，Codex 插件在需求/�
 
 - 合成多仓库 fixture 覆盖新增、修改、删除、基线变更、方法调用、Mapper/XML、歧义与诊断。
 - `go test ./...`、`go vet ./...`、交叉平台构建通过。
-- BasisProject 只读验收保持所有 Git 工作区状态不变。
+- ExampleWorkspace 只读验收保持所有 Git 工作区状态不变。
 - 至少 3 个真实需求由用户验收，分别覆盖单仓库、跨仓库和二次开发/变更影响场景。

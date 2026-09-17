@@ -13,7 +13,7 @@
 
 ## 现状与根因
 
-当前每个 MCP 进程在工具调用中直接打开同一个 `index.sqlite`，并对除报告查询/反馈外的大部分请求执行 `indexer.Refresh`。刷新会持有仓库级写事务，因此两个 `project-brain mcp E:\BasisProject` 进程可同时争夺写锁，也可能使不同请求观察到不同刷新阶段。
+当前每个 MCP 进程在工具调用中直接打开同一个 `index.sqlite`，并对除报告查询/反馈外的大部分请求执行 `indexer.Refresh`。刷新会持有仓库级写事务，因此两个 `project-brain mcp E:\ExampleWorkspace` 进程可同时争夺写锁，也可能使不同请求观察到不同刷新阶段。
 
 ## 方案选择
 
@@ -114,7 +114,7 @@ MCP/CLI 客户端
 
 ### 真实工作区
 
-在 `E:\BasisProject` 记录首次迁移、一次默认分支变化后的增量刷新、三个并发分析请求的耗时和磁盘占用；前后逐仓库对比 `git status --short`，证明零业务仓库写入。
+在 `E:\ExampleWorkspace` 记录首次迁移、一次默认分支变化后的增量刷新、三个并发分析请求的耗时和磁盘占用；前后逐仓库对比 `git status --short`，证明零业务仓库写入。
 
 ## 非目标
 

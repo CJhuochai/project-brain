@@ -151,20 +151,20 @@
 - [ ] 运行 `go test ./internal/requirement ./internal/mcp ./...`。
 - [ ] 提交：`feat: expose project brain through MCP`。
 
-### 任务 7：发布验证、BasisProject 只读验收与文档
+### 任务 7：发布验证、ExampleWorkspace 只读验收与文档
 
 **文件：**
 - 创建：`scripts/verify-readonly.ps1`
-- 创建：`scripts/accept-basisproject.ps1`
+- 创建：`scripts/accept-exampleworkspace.ps1`
 - 修改：`README.md`
 - 修改：`docs/superpowers/specs/2026-08-24-project-brain-v1-design.md`
 
 **接口：**
 - `verify-readonly.ps1` 接收工作区路径，记录并比较每个仓库 `git status --porcelain`。
-- `accept-basisproject.ps1` 只调用 `discover`、`index`、`status`，不读取或输出任何源码正文。
+- `accept-exampleworkspace.ps1` 只调用 `discover`、`index`、`status`，不读取或输出任何源码正文。
 
 - [ ] 写 PowerShell 自检：扫描前后仓库状态不变，否则返回失败。
-- [ ] 运行 BasisProject 验收，只输出仓库数量、基线状态、文件计数和诊断摘要。
+- [ ] 运行 ExampleWorkspace 验收，只输出仓库数量、基线状态、文件计数和诊断摘要。
 - [ ] 在 README 写明安装、使用、隐私、非目标、MCP 接入、删除本地数据和 GitHub 开源前的脱敏规则。
 - [ ] 运行 `go test ./...`、`go vet ./...`、`go build ./cmd/project-brain` 和只读验收。
 - [ ] 提交：`docs: document local-first project brain v1`。

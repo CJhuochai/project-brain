@@ -103,7 +103,7 @@ func TestToolsExposeReportLoopContracts(t *testing.T) {
 **Interfaces:** Versioned release build emits four binaries and checksums; acceptance records report ID, local input digest, feedback decision, index state and unchanged business-repository Git status.
 - [ ] **Step 1: Write failing workflow assertions.** Add tests requiring `analyze_inputs`, report lookup and feedback examples in both README files and the Codex skill; run them before documentation changes.
 - [ ] **Step 2: Document exact workflow.** Add Chinese/English examples for local path analysis, report lookup and feedback. Update the Codex skill to call `analyze_inputs` when local attachments/prototypes exist, then request code-plan confirmation.
-- [ ] **Step 3: Create real acceptance evidence.** Run against `E:\BasisProject` using a local requirement document and benign HTML/JSON sample; record before/after `git status --short` for every business repository. Do not copy business source or attachments into this repository.
+- [ ] **Step 3: Create real acceptance evidence.** Run against `E:\ExampleWorkspace` using a local requirement document and benign HTML/JSON sample; record before/after `git status --short` for every business repository. Do not copy business source or attachments into this repository.
 - [ ] **Step 4: Verify release gate.** Run `go test ./...`, `go vet ./...`, `.\scripts\build-release.ps1 -Version 1.1.0`, `.\scripts\test-release-layout.ps1 -Version 1.1.0`, and `git diff --check`; expect all checks pass.
 - [ ] **Step 5: Commit.** Run `git add README.md README.en.md codex-plugin/project-brain-codex docs/acceptance scripts; git commit -m "docs: document next version analysis workflow"`.
 ## Plan Self-Review

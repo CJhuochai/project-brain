@@ -10,7 +10,7 @@
 
 **本地优先、只读的多仓库代码知识库。** 给它一个微服务工作区，Project Brain 会扫描各仓库的远程默认分支索引，帮助开发 Agent 定位需求涉及的项目、代码入口、调用链、变更影响与待确认风险。
 
-> 所有索引保存在你的电脑；不上传业务源码，不 fetch、checkout 或修改业务仓库。
+> 所有索引保存在你的电脑；PB 本身不上传业务源码，不 fetch、checkout 或修改业务仓库。
 
 ## 整体架构
 
@@ -18,7 +18,7 @@ v2.0 提供精确/全文排序检索、稳定符号 ID、查询完整性、业�
 
 ![Project Brain 整体架构](assets/project-brain-architecture-zh.svg)
 
-从 Agent/CLI 入口到本机协调者、不可变索引快照和分析报告，所有数据均停留在用户电脑；业务仓库仅被只读扫描。并发会话读取同一份完整快照，刷新完成后再原子切换。
+从 Agent/CLI 入口到本机协调者、不可变索引快照和分析报告，PB 的索引和报告保存在本机；业务仓库仅被只读扫描。并发会话读取同一份完整快照，刷新完成后再原子切换。
 
 ## 它能做什么
 
@@ -48,15 +48,15 @@ go build -o bin\project-brain.exe ./cmd/project-brain
 以 Windows 为例，对一个微服务工作区执行：
 
 ```powershell
-bin\project-brain.exe discover E:\BasisProject
-bin\project-brain.exe index E:\BasisProject
-bin\project-brain.exe status E:\BasisProject
-bin\project-brain.exe search E:\BasisProject groupSubmit
-bin\project-brain.exe trace E:\BasisProject com.example.EntryController
-bin\project-brain.exe impact E:\BasisProject com.example.EntryService
-bin\project-brain.exe context E:\BasisProject com.example.EntryController --repository E:\BasisProject\example --limit 10
-bin\project-brain.exe flow E:\BasisProject com.example.EntryController --max-depth 8
-bin\project-brain.exe contracts E:\BasisProject orders --limit 100
+bin\project-brain.exe discover E:\ExampleWorkspace
+bin\project-brain.exe index E:\ExampleWorkspace
+bin\project-brain.exe status E:\ExampleWorkspace
+bin\project-brain.exe search E:\ExampleWorkspace submitOrder
+bin\project-brain.exe trace E:\ExampleWorkspace com.example.EntryController
+bin\project-brain.exe impact E:\ExampleWorkspace com.example.EntryService
+bin\project-brain.exe context E:\ExampleWorkspace com.example.EntryController --repository E:\ExampleWorkspace\example --limit 10
+bin\project-brain.exe flow E:\ExampleWorkspace com.example.EntryController --max-depth 8
+bin\project-brain.exe contracts E:\ExampleWorkspace orders --limit 100
 ```
 
 所有命令默认输出 JSON。`trace` 只在目标符号唯一时向下遍历；同名符号会返回候选而不会猜测。`impact` 会保留 `certain` 与 `probable` 置信度。
@@ -66,19 +66,19 @@ bin\project-brain.exe contracts E:\BasisProject orders --limit 100
 ## 接入 Codex MCP
 
 ```powershell
-bin\project-brain.exe mcp E:\BasisProject
+bin\project-brain.exe mcp E:\ExampleWorkspace
 ```
 
-支持 `workspace_status`、`find_business_context`、`trace_code_path`、`analyze_change_impact`、`analyze_change`、`analyze_requirement`、`analyze_inputs`、`get_analysis_report`、`record_analysis_feedback` 与 `get_evidence`。
+支持 `workspace_status`、`find_business_context`、`trace_code_path`、`analyze_change_impact`、`analyze_change`、`analyze_requirement`、`analyze_inputs`、`get_analysis_report`、`record_analysis_feedback`、`get_symbol_context`、`trace_business_flow`、`list_contracts` 与 `get_evidence`。
 
 ## 1.1 日常需求闭环
 
 把需求文档、HTML 原型、Figma 本地 JSON 导出或 DOCX 放在本机后执行：
 
 ```powershell
-bin\project-brain.exe analyze E:\BasisProject C:\local\entry-requirement.docx C:\local\prototype.html
-bin\project-brain.exe report E:\BasisProject <报告ID>
-bin\project-brain.exe feedback E:\BasisProject <报告ID> repository entry-service rule "人工确认"
+bin\project-brain.exe analyze E:\ExampleWorkspace C:\local\entry-requirement.docx C:\local\prototype.html
+bin\project-brain.exe report E:\ExampleWorkspace <报告ID>
+bin\project-brain.exe feedback E:\ExampleWorkspace <报告ID> repository entry-service rule "人工确认"
 ```
 
 `analyze_inputs` 是对应的 MCP 工具，接收 `text`、本地 `paths` 与可选 `source_ref`。结果包含候选项目/模块、建议分支（仅建议，不创建 Git 分支）、文件/方法证据、测试点、风险和输入摘要；原始附件不会被复制或上传。人工反馈只写入本机索引库，并会在下一次分析时按精确项目规则显示。
@@ -110,13 +110,19 @@ args = ["mcp", "/absolute/path/to/workspace"]
 
 - 索引库位于 `%LOCALAPPDATA%\ProjectBrain`（其他系统遵循 XDG 本地数据目录），删除对应工作区哈希目录即可清除。
 - 不会执行 checkout、fetch、commit、构建或测试业务仓库，也不会向业务仓库写任何文件。
-- 当前 1.0 使用确定性文本提取 Java/Spring、MyBatis XML 与 Maven 关系；反射、动态 SQL、运行时路由等结论必须人工确认。
+- 当前使用确定性文本提取 Java/Spring、MyBatis XML 与 Maven 关系；反射、动态 SQL、运行时路由等结论必须人工确认。
 
 ## 验收与发布
 
 - [1.0 本地验收记录](docs/acceptance/project-brain-1.0.md)：30 个仓库发现、29 个完成索引、11,172 个文件；已用真实需求和 Git 提交验证。
 - [v1.0.0 发布页](https://github.com/CJhuochai/project-brain/releases/tag/v1.0.0)：提供 Windows x64、Linux x64、macOS Intel、macOS Apple Silicon 可执行文件及 SHA-256 校验文件。
 - [变更日志](CHANGELOG.md)：版本功能与修复记录；发布由推送 `vX.Y.Z` 标签自动完成构建、校验和 GitHub Release 创建。
+
+## 贡献与安全
+
+阅读 [贡献指南](CONTRIBUTING.md) 和 [安全政策](SECURITY.md)。问题反馈请提供脱敏的最小复现，勿上传业务源码、需求附件、索引或报告。MCP 查询结果会交给客户端；是否发送给远程模型取决于客户端配置。
+
+最新验证与限制见 [v2.0.0 验证记录](docs/validation/v2.0.0.md)。
 
 ## 许可证
 

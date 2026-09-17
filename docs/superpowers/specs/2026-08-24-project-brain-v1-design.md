@@ -16,18 +16,18 @@
 - 不向远端服务发送源码、文档文本、向量或遥测数据。
 - 不把 Spring 动态装配、反射、配置中心路由或工作区外服务当成静态代码已经证明的事实。
 - 不交付浏览器 UI、图数据库服务、向量数据库或自动改业务代码的工作流。
-- 不要求 BasisProject 专属的名称、路径、服务名或分支名。
+- 不要求 ExampleWorkspace 专属的名称、路径、服务名或分支名。
 
 ## 用户使用流程
 
 ```text
-project-brain init E:\\BasisProject
-project-brain update E:\\BasisProject
-project-brain status E:\\BasisProject
+project-brain init E:\\ExampleWorkspace
+project-brain update E:\\ExampleWorkspace
+project-brain status E:\\ExampleWorkspace
 project-brain search "招生 面试 排考"
 project-brain trace --route /group-submit
 project-brain impact --symbol StudentEntryApplication.groupSubmit
-project-brain mcp serve --workspace E:\\BasisProject
+project-brain mcp serve --workspace E:\\ExampleWorkspace
 ```
 
 `init` 只创建用户自己的本地数据；`update` 只刷新已变化文件的记录；`search`、`trace` 和 `impact` 默认输出结构化 JSON，也可输出简洁终端文本。
@@ -116,7 +116,7 @@ MCP 适配层可在任务开始时执行 `update`，因为它只写用户自己�
 
 使用合成的多仓库 fixture 工作区进行单元与集成测试，覆盖仓库发现、零写入保证、基线识别、增量更新、Java/Spring/MyBatis 提取、符号歧义、trace/impact 证据、FTS 检索和 MCP JSON-RPC 协议。
 
-增加一个只读 BasisProject 验收脚本，只验证发现和状态；不得将生产源码文本写入测试仓库，也不得修改任何 BasisProject checkout。
+增加一个只读 ExampleWorkspace 验收脚本，只验证发现和状态；不得将生产源码文本写入测试仓库，也不得修改任何 ExampleWorkspace checkout。
 
 ## 发布标准
 

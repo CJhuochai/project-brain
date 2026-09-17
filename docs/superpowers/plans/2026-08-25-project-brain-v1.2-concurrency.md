@@ -540,7 +540,7 @@ Expected: PASS；无 data race，旧 v1.1 测试和 v1.2 并发/恢复/迁移测
 
 - [ ] **Step 6: 在真实工作区执行只读验收**
 
-Run: `powershell -ExecutionPolicy Bypass -File .\scripts\verify-v1.2.ps1 -Workspace E:\BasisProject -Executable .\dist\project-brain.exe`
+Run: `powershell -ExecutionPolicy Bypass -File .\scripts\verify-v1.2.ps1 -Workspace E:\ExampleWorkspace -Executable .\dist\project-brain.exe`
 
 Expected: 输出一次迁移或已存在快照、一次增量刷新、三个并发请求只对应一个 refresh task、快照大小/耗时、所有业务仓库前后 `git status --short` 无新增差异。没有默认分支变化时，脚本输出“未触发增量变化”，但仍验证三客户端合并和零写入。
 
@@ -559,4 +559,4 @@ Expected: 一个仅包含验收脚本、恢复补测和文档的提交。
 - [ ] 将每个任务与设计文档的“快照与原子切换”“刷新合并与新鲜度”“反馈与报告一致性”“本地 IPC 与崩溃恢复”“对外契约”“验收”对应，确认无遗漏。
 - [ ] 用 `rg` 扫描本计划中的未完成占位标记，预期无结果。
 - [ ] 执行 `go vet ./...`、`go test -race ./... -count=1`；记录实际命令和输出摘要。
-- [ ] 执行 `git diff --check` 与 `git status --short`；只提交 Project Brain 改动，不触及 `E:\BasisProject` 业务仓库文件。
+- [ ] 执行 `git diff --check` 与 `git status --short`；只提交 Project Brain 改动，不触及 `E:\ExampleWorkspace` 业务仓库文件。

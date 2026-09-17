@@ -16,11 +16,11 @@ func TestWorkspaceDirUsesLocalAppDataAndStablePathHash(t *testing.T) {
 		t.Setenv("XDG_DATA_HOME", "")
 	}
 
-	first, err := WorkspaceDir(`E:\\BasisProject`)
+	first, err := WorkspaceDir(`E:\\ExampleWorkspace`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := WorkspaceDir(`e:\\basisproject\\`)
+	second, err := WorkspaceDir(`e:\\exampleworkspace\\`)
 	if err != nil {
 		t.Fatal(err)
 	}
